@@ -884,25 +884,15 @@ class DBInterface(object):
         else:
             ret_val = []
 
-        net_objs = self._virtual_network_list(project_id,
-                         fields=['virtual_machine_interface_back_refs'],
-                         detail=True)
-        if not net_objs:
-            return ret_val
-
-        if count:
-            for net_obj in net_objs:
-                port_back_refs = (
-                    net_obj.get_virtual_machine_interface_back_refs() or [])
-                ret_val = ret_val + len(port_back_refs)
-            return ret_val
-
-        net_ids = [net_obj.uuid for net_obj in net_objs]
-        port_objs = self._virtual_machine_interface_list(back_ref_id=net_ids,
+        port_objs = self._virtual_machine_interface_list(parent_id=project_id,
                                           fields=['instance_ip_back_refs'])
-        iip_objs = self._instance_ip_list(back_ref_id=net_ids)
+        if count:
+            ret_val = ret_val + len(port_objs)
+            return ret_val
 
-        ret_val = self._port_list(net_objs, port_objs, iip_objs)
+        iip_objs = self._instance_ip_list()
+
+        ret_val = self._port_list([], port_objs, iip_objs)
 
         return ret_val
     #end _port_list_project
@@ -1232,8 +1222,11 @@ class DBInterface(object):
                 addr.get_security_group() != 'local':
                 remote_sg = addr.get_security_group()
                 try:
-                    remote_sg_obj = self._vnc_lib.security_group_read(
-                        fq_name_str=remote_sg)
+                    if remote_sg != ':'.join(sg_obj.get_fq_name()):
+                        remote_sg_obj = self._vnc_lib.security_group_read(
+                            fq_name_str=remote_sg)
+                    else:
+                        remote_sg_obj = sg_obj
                     remote_sg_uuid = remote_sg_obj.uuid
                 except NoIdError:
                     pass
@@ -1430,18 +1423,34 @@ class DBInterface(object):
         else:
             # Assigned by address manager
             alloc_pools = None
+
+        dhcp_option_list = None
         if subnet_q['dns_nameservers'] != attr.ATTR_NOT_SPECIFIED:
-            dns_server = subnet_q['dns_nameservers']
-        else:
-            dns_server = None
+            dhcp_options=[]
+            for dns_server in subnet_q['dns_nameservers']:
+                dhcp_options.append(DhcpOptionType(dhcp_option_name='6',
+                                                   dhcp_option_value=dns_server))
+            if dhcp_options:
+                dhcp_option_list = DhcpOptionsListType(dhcp_options)
+
+        host_route_list = None
+        if subnet_q['host_routes'] != attr.ATTR_NOT_SPECIFIED:
+            host_routes=[]
+            for host_route in subnet_q['host_routes']:
+                host_routes.append(RouteType(prefix=host_route['destination'],
+                                             next_hop=host_route['nexthop']))
+            if host_routes:
+                host_route_list = RouteTableType(host_routes)
 
         dhcp_config = subnet_q['enable_dhcp']
         subnet_vnc = IpamSubnetType(subnet=SubnetType(pfx, pfx_len),
                                     default_gateway=default_gw,
                                     enable_dhcp=dhcp_config,
-                                    dns_nameservers=dns_server,
+                                    dns_nameservers=None,
                                     allocation_pools=alloc_pools,
-                                    addr_from_start=True)
+                                    addr_from_start=True,
+                                    dhcp_option_list=dhcp_option_list,
+                                    host_routes=host_route_list)
 
         return subnet_vnc
     #end _subnet_neutron_to_vnc
@@ -1484,20 +1493,27 @@ class DBInterface(object):
             allocation_pools.append(cidr_pool)
         sn_q_dict['allocation_pools'] = allocation_pools
         sn_q_dict['enable_dhcp'] = subnet_vnc.get_enable_dhcp()
-        nameservers = subnet_vnc.get_dns_nameservers()
-        if nameservers is None or not nameservers:
-            sn_q_dict['dns_nameservers'] = [{'address': '169.254.169.254',
-                                             'subnet_id': sn_id}]
-        else:
-            nameserver_dict_list = list()
-            for nameserver in nameservers:
-                nameserver_entry = {'address': nameserver,
+
+        nameserver_dict_list = list()
+        dhcp_option_list = subnet_vnc.get_dhcp_option_list()
+        if dhcp_option_list:
+            for dhcp_option in dhcp_option_list.dhcp_option:
+                if dhcp_option.get_dhcp_option_name() == '6':
+                    nameserver_entry = {'address': dhcp_option.get_dhcp_option_value(),
+                                        'subnet_id': sn_id}
+                    nameserver_dict_list.append(nameserver_entry)
+
+        sn_q_dict['dns_nameservers'] = nameserver_dict_list
+
+        host_route_dict_list = list()
+        host_routes = subnet_vnc.get_host_routes()
+        if host_routes:
+            for host_route in host_routes.route:
+                host_route_entry = {'destination': host_route.get_prefix(),
+                                    'nexthop': host_route.get_next_hop(),
                                     'subnet_id': sn_id}
-                nameserver_dict_list.append(nameserver_entry) 
-            sn_q_dict['dns_nameservers'] = nameserver_dict_list
-             
-        # TODO get from ipam_obj
-        sn_q_dict['routes'] = []
+                host_route_dict_list.append(host_route_entry)
+        sn_q_dict['routes'] = host_route_dict_list
 
         if net_obj.is_shared:
             sn_q_dict['shared'] = True
@@ -2027,13 +2043,8 @@ class DBInterface(object):
     def subnet_create(self, subnet_q):
         if subnet_q['gateway_ip'] == None:
             # return exception. This attribute is not supported yet
-             msg = _("Disable gateway is not supported")
-             raise exceptions.BadRequest(resource='subnet', msg=msg)
-
-        if subnet_q['host_routes'] != attr.ATTR_NOT_SPECIFIED:
-             # return exception. This attribute is not supported yet
-             msg = _("Setting host routes is not supported")
-             raise exceptions.BadRequest(resource='subnet', msg=msg)  
+            msg = _("Disable gateway is not supported")
+            raise exceptions.BadRequest(resource='subnet', msg=msg)
 
         net_id = subnet_q['network_id']
         net_obj = self._virtual_network_read(net_id=net_id)
@@ -2122,10 +2133,69 @@ class DBInterface(object):
     #end subnet_read
 
     def subnet_update(self, subnet_id, subnet_q):
-        msg = _("subnet update not yet supported")
-        raise exceptions.BadRequest(resource='subnet', msg=msg)
-        # TODO implement this
-        # return subnet_q
+        if 'name' in subnet_q:
+            if subnet_q['name'] != attr.ATTR_NOT_SPECIFIED:
+                msg = _("Subnet name cannot be modified")
+                raise exceptions.BadRequest(resource='subnet', msg=msg)
+
+        if 'ip_version' in subnet_q:
+            if subnet_q['ip_version'] == 6:
+                msg = _("IPv6 is not supported")
+                raise exceptions.BadRequest(resource='subnet', msg=msg)
+
+        if 'gateway_ip' in subnet_q:
+            if subnet_q['gateway_ip'] == None:
+                # return exception. This attribute is not supported yet
+                msg = _("Gateway disabling is not supported")
+                raise exceptions.BadRequest(resource='subnet', msg=msg)
+ 
+        if 'host_routes' in subnet_q:
+            if subnet_q['host_routes'] != attr.ATTR_NOT_SPECIFIED:
+                # return exception. This attribute is not supported yet
+                msg = _("update of host-routes is not supported")
+                raise exceptions.BadRequest(resource='subnet', msg=msg) 
+
+        if 'allocation_pools' in subnet_q:
+            if subnet_q['allocation_pools'] != attr.ATTR_NOT_SPECIFIED:
+                # return exception. This attribute is not supported yet
+                msg = _("update of allocation_pools is not supported")
+                raise exceptions.BadRequest(resource='subnet', msg=msg)
+
+        subnet_key = self._subnet_vnc_read_mapping(id=subnet_id)
+        net_id = subnet_key.split()[0]
+        net_obj = self._network_read(net_id)
+        ipam_refs = net_obj.get_network_ipam_refs()
+        subnet_found = False
+        if ipam_refs:
+            for ipam_ref in ipam_refs:
+                subnets = ipam_ref['attr'].get_ipam_subnets()
+                for subnet_vnc in subnets:
+                    if self._subnet_vnc_get_key(subnet_vnc,
+                               net_id) == subnet_key:
+                        subnet_found = True
+                        break
+                if subnet_found:
+                    if 'enable_dhcp' in subnet_q:
+                        if subnet_q['enable_dhcp'] != attr.ATTR_NOT_SPECIFIED: 
+                            subnet_vnc.set_enable_dhcp(subnet_q['enable_dhcp'])
+                                                    
+                    if 'gateway_ip' in subnet_q:
+                        if subnet_q['gateway_ip'] != attr.ATTR_NOT_SPECIFIED:
+                            subnet_vnc.set_default_gateway(subnet_q['gateway_ip'])
+        
+                    if 'dns_nameservers' in subnet_q:
+                        if subnet_q['dns_nameservers'] != attr.ATTR_NOT_SPECIFIED:
+                            subnet_vnc.set_dns_nameservers(subnet_q['dns_nameservers'])
+                
+                    net_obj._pending_field_updates.add('network_ipam_refs')
+                    self._virtual_network_update(net_obj)
+                    ret_subnet_q = self._subnet_vnc_to_neutron(
+                                        subnet_vnc, net_obj, ipam_ref['to'])
+
+                    self._db_cache['q_subnets'][subnet_id] = ret_subnet_q
+                    return ret_subnet_q
+                    
+        return {}
     # end subnet_update
 
     def subnet_delete(self, subnet_id):
