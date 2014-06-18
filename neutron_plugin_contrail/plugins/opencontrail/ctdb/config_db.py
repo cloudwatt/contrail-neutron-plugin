@@ -23,6 +23,7 @@ from neutron.extensions import portbindings
 from neutron.extensions import securitygroup as ext_sg
 from neutron.extensions import l3
 from neutron.openstack.common import log as logging
+from neutron.openstack.common import periodic_task
 from neutron.extensions import external_net as ext_net_extn
 from neutron_plugin_contrail.extensions import policy
 
@@ -38,6 +39,10 @@ READ = 2
 UPDATE = 3
 DELETE = 4
 
+DEFAULT_PROJECT_FQ_NAME = ['default-domain', 'default-project']
+SNAT_SERVICE_TEMPLATE_FQ_NAME = ['default-domain', 'netns-snat-template']
+SNAT_SUBNET_CIDR = '100.64.0.0/30'
+SNAT_DELETE_NETWORK_TIMEOUT = 5
 
 class DBInterface(object):
     """
@@ -438,7 +443,7 @@ class DBInterface(object):
             net_obj = self._db_cache['vnc_networks'][net_id]
             fq_name_str = json.dumps(net_obj.get_fq_name())
         except KeyError:
-            pass
+            net_obj = None
 
         try:
             if net_obj and net_obj.get_floating_ip_pools():
@@ -516,7 +521,7 @@ class DBInterface(object):
             port_obj = self._db_cache['vnc_ports'][port_id]
             fq_name_str = json.dumps(port_obj.get_fq_name())
         except KeyError:
-            pass
+            port_obj = None
 
         self._vnc_lib.virtual_machine_interface_delete(id=port_id)
 
@@ -584,7 +589,7 @@ class DBInterface(object):
             iip_obj = self._db_cache['vnc_instance_ips'][instance_ip_id]
             fq_name_str = json.dumps(iip_obj.get_fq_name())
         except KeyError:
-            pass
+            iip_obj = None
 
         self._vnc_lib.instance_ip_delete(id=instance_ip_id)
 
@@ -772,7 +777,7 @@ class DBInterface(object):
             rtr_obj = self._db_cache['vnc_routers'][rtr_id]
             fq_name_str = json.dumps(rtr_obj.get_fq_name())
         except KeyError:
-            pass
+            rtr_obj = None
 
         self._vnc_lib.logical_router_delete(id=rtr_id)
 
@@ -1446,7 +1451,11 @@ class DBInterface(object):
             if host_routes:
                 host_route_list = RouteTableType(host_routes)
 
-        dhcp_config = subnet_q['enable_dhcp']
+        if subnet_q['enable_dhcp'] != attr.ATTR_NOT_SPECIFIED:
+            dhcp_config = subnet_q['enable_dhcp']
+        else:
+            dhcp_config = None
+
         subnet_vnc = IpamSubnetType(subnet=SubnetType(pfx, pfx_len),
                                     default_gateway=default_gw,
                                     enable_dhcp=dhcp_config,
@@ -2463,6 +2472,7 @@ class DBInterface(object):
         if ext_gateway:
             network_id = ext_gateway.get('network_id')
             if network_id:
+                self._router_set_external_gateway(rtr_uuid, network_id)
                 self._vnc_lib.kv_store('ext_gateway_info:' + rtr_uuid,
                                        network_id)
         ret_router_q = self._router_vnc_to_neutron(rtr_obj, rtr_repr='SHOW')
@@ -2485,10 +2495,216 @@ class DBInterface(object):
         return self._router_vnc_to_neutron(rtr_obj, rtr_repr='SHOW')
     #end router_read
 
+    def _router_set_external_gateway(self, rtr_id, ext_net_id=None):
+        default_project_obj = self._project_read(
+            fq_name=DEFAULT_PROJECT_FQ_NAME)
+
+        # Get net_ns SNAT service template
+        try:
+            st_obj = self._vnc_lib.service_template_read(
+                fq_name=SNAT_SERVICE_TEMPLATE_FQ_NAME)
+        except NoIdError:
+            msg = _("Unable to set or clear the default gateway")
+            raise exceptions.BadRequest(resource='router', msg=msg)
+
+        # Get the SNAT net if it exists
+        snat_net_name = 'vn_snat_' + rtr_id
+        snat_net_fq_name = default_project_obj.get_fq_name() + [snat_net_name]
+        try:
+            snat_net_obj = self._vnc_lib.virtual_network_read(
+                fq_name=snat_net_fq_name)
+            snat_net_uuid = snat_net_obj.uuid
+        except NoIdError:
+            snat_net_obj = None
+
+        # Get the service instance if it exists
+        si_name = 'si_' + rtr_id
+        si_fq_name = default_project_obj.get_fq_name() + [si_name]
+        try:
+            si_obj = self._vnc_lib.service_instance_read(fq_name=si_fq_name)
+            si_uuid = si_obj.uuid
+        except NoIdError:
+            si_obj = None
+
+        # Get route table for default route it it exists
+        rt_name = 'rt_' + rtr_id
+        rt_fq_name = default_project_obj.get_fq_name() + [rt_name]
+        try:
+            rt_obj = self._vnc_lib.route_table_read(fq_name=rt_fq_name)
+            rt_uuid = rt_obj.uuid
+        except NoIdError:
+            rt_obj = None
+
+        # Create a netns service
+        if ext_net_id:
+            # Get the external virtual network
+            try:
+                ext_net_obj = self._vnc_lib.virtual_network_read(id=ext_net_id)
+            except NoIdError:
+                raise exceptions.NetworkNotFound(net_id=ext_net_id)
+
+            if not ext_net_obj.router_external:
+                msg = _("Network %s is not an external network") % ext_net_id
+                raise exceptions.BadRequest(resource='router', msg=msg)
+
+            if not snat_net_obj:
+                # Create SNAT virtual network if needed
+                snat_net_q = {
+                    'id': str(uuid.uuid4()),
+                    'admin_state_up': True,
+                    'name': snat_net_name,
+                    'router:external': False,
+                    'shared': False,
+                    'tenant_id': default_project_obj.uuid
+                }
+                snat_net_q = self.network_create(snat_net_q)['q_api_data']
+                snat_net_obj = self._network_neutron_to_vnc(snat_net_q, READ)
+                snat_net_uuid = snat_net_obj.uuid
+            snat_subnet_q = {
+                'id': str(uuid.uuid4()),
+                'admin_state_up': True,
+                'cidr': SNAT_SUBNET_CIDR,
+                'gateway_ip': attr.ATTR_NOT_SPECIFIED,
+                'allocation_pools': attr.ATTR_NOT_SPECIFIED,
+                'dns_nameservers': attr.ATTR_NOT_SPECIFIED,
+                'enable_dhcp': attr.ATTR_NOT_SPECIFIED,
+                'host_routes': attr.ATTR_NOT_SPECIFIED,
+                'name': 'sub' + snat_net_name,
+                'ip_version': 4,
+                'network_id': snat_net_uuid,
+                'tenant_id': default_project_obj.uuid
+            }
+            self.subnet_create(snat_subnet_q)
+
+            # Set the service instance
+            si_created = False
+            if not si_obj:
+                si_obj = ServiceInstance(si_name,
+                                         parent_obj=default_project_obj)
+                si_created = True
+            #TODO(ethuleau): For the fail-over SNAT set scale out to 2
+            si_prop_obj = ServiceInstanceType(
+                left_virtual_network=snat_net_obj.get_fq_name_str(),
+                right_virtual_network=ext_net_obj.get_fq_name_str(),
+                scale_out=ServiceScaleOutType(max_instances=1,
+                                              auto_scale=True),
+                auto_policy=True)
+            si_obj.set_service_instance_properties(si_prop_obj)
+            si_obj.set_service_template(st_obj)
+            if si_created:
+                si_uuid = self._vnc_lib.service_instance_create(si_obj)
+            else:
+                self._vnc_lib.service_instance_update(si_obj)
+
+            # Set the route table
+            route_obj = RouteType(prefix="0.0.0.0/0",
+                                  next_hop=si_obj.get_fq_name_str())
+            rt_created = False
+            if not rt_obj:
+                rt_obj = RouteTable(name=rt_name,
+                                    parent_obj=default_project_obj)
+                rt_created = True
+            rt_obj.set_routes(RouteTableType.factory([route_obj]))
+            if rt_created:
+                rt_uuid = self._vnc_lib.route_table_create(rt_obj)
+            else:
+                self._vnc_lib.route_table_update(rt_obj)
+
+            # Associate route table to all private networks connected onto
+            # that router
+            priv_net_ids = [port['q_api_data']['network_id'] for port in 
+                            self.port_list(filters={'device_id': [rtr_id]})]
+            for net_id in priv_net_ids:
+                try:
+                    net_obj = self._vnc_lib.virtual_network_read(id=net_id)
+                except NoIdError:
+                    raise exceptions.NetworkNotFound(net_id=ext_net_id)
+                net_obj.set_route_table(rt_obj)
+                self._vnc_lib.virtual_network_update(net_obj)
+        # Destroy a netns service
+        else:
+            # Delete route table
+            if rt_obj:
+                # Disassociate route table to all private networks connected
+                # onto that router
+                for net_ref in rt_obj.get_virtual_network_back_refs() or []:
+                    try:
+                        net_obj = self._vnc_lib.virtual_network_read(
+                            id=net_ref['uuid'])
+                    except NoIdError:
+                        raise exceptions.NetworkNotFound(net_id=ext_net_id)
+                    net_obj.del_route_table(rt_obj)
+                    self._vnc_lib.virtual_network_update(net_obj)
+                self._vnc_lib.route_table_delete(id=rt_obj.uuid)
+
+            # Delete service instance
+            if si_obj:
+                self._vnc_lib.service_instance_delete(id=si_uuid)
+
+            # Delete SNAT virtual network
+            if snat_net_obj:
+                # Wait SVC monitor delete all VMs and VMIs before delete the
+                # SNAT network
+                with eventlet.timeout.Timeout(SNAT_DELETE_NETWORK_TIMEOUT,
+                                              False):
+                    while True:
+                        try:
+                            self.network_delete(snat_net_uuid)
+                            break
+                        except exceptions.NetworkInUse:
+                            eventlet.sleep(1)
+
+    def _set_snat_routing_table(self, router_id, network_id):
+        rt_name = 'rt_' + router_id
+        rt_fq_name = DEFAULT_PROJECT_FQ_NAME + [rt_name]
+        try:
+            rt_obj = self._vnc_lib.route_table_read(fq_name=rt_fq_name)
+            rt_uuid = rt_obj.uuid
+        except NoIdError:
+            # No route table set with that router ID, the gateway is not set
+            return
+
+        try:
+            net_obj = self._vnc_lib.virtual_network_read(id=network_id)
+        except NoIdError:
+            raise exceptions.NetworkNotFound(net_id=ext_net_id)
+        net_obj.set_route_table(rt_obj)
+        self._vnc_lib.virtual_network_update(net_obj)
+
+    def _clear_snat_routing_table(self, router_id, network_id):
+        rt_name = 'rt_' + router_id
+        rt_fq_name = DEFAULT_PROJECT_FQ_NAME + [rt_name]
+        try:
+            rt_obj = self._vnc_lib.route_table_read(fq_name=rt_fq_name)
+            rt_uuid = rt_obj.uuid
+        except NoIdError:
+            # No route table set with that router ID, the gateway is not set
+            return
+
+        try:
+            net_obj = self._vnc_lib.virtual_network_read(id=network_id)
+        except NoIdError:
+            raise exceptions.NetworkNotFound(net_id=ext_net_id)
+        net_obj.del_route_table(rt_obj)
+        self._vnc_lib.virtual_network_update(net_obj)
+
     def router_update(self, rtr_id, router_q):
         router_q['id'] = rtr_id
         rtr_obj = self._router_neutron_to_vnc(router_q, UPDATE)
+        gw_info = router_q.pop(l3.EXTERNAL_GW_INFO, attr.ATTR_NOT_SPECIFIED)
+
         self._logical_router_update(rtr_obj)
+
+        # Check if we need to create/destroy netns service instance to handle
+        # SNAT gateway
+        if gw_info != attr.ATTR_NOT_SPECIFIED:
+            self._router_set_external_gateway(rtr_id,
+                                              gw_info.get('network_id'))
+            if not gw_info.get('network_id'):
+                self._vnc_lib.kv_delete('ext_gateway_info:' + rtr_id)
+            else:
+                self._vnc_lib.kv_store('ext_gateway_info:' + rtr_id,
+                                       gw_info.get('network_id'))
 
         ret_router_q = self._router_vnc_to_neutron(rtr_obj, rtr_repr='SHOW')
         self._db_cache['q_routers'][rtr_id] = ret_router_q
@@ -2496,9 +2712,20 @@ class DBInterface(object):
         return ret_router_q
     #end router_update
 
+    def _ensure_router_not_in_use(self, router_id):
+        device_owner = constants.DEVICE_OWNER_ROUTER_INTF
+        device_filter = {'device_id': [router_id],
+                         'device_owner': [device_owner]}
+        port_count = self.port_count(filters=device_filter)
+        if port_count:
+            raise l3.RouterInUse(router_id=router_id)
+
     def router_delete(self, rtr_id):
+        self._ensure_router_not_in_use(rtr_id)
+        self._router_set_external_gateway(rtr_id)
         self._logical_router_delete(rtr_id=rtr_id)
         self._vnc_lib.kv_delete(key='ext_gateway_info:' + rtr_id)
+        #self._vnc_lib.kv_delete('ext_gateway_info:' + rtr_id)
         try:
             del self._db_cache['q_routers'][rtr_id]
         except KeyError:
@@ -2657,6 +2884,7 @@ class DBInterface(object):
         vmi_obj = self._vnc_lib.virtual_machine_interface_read(id=port_id)
         router_obj.add_virtual_machine_interface(vmi_obj)
         self._logical_router_update(router_obj)
+        self._set_snat_routing_table(router_id, subnet['network_id'])
         info = {'id': router_id,
                 'tenant_id': subnet['tenant_id'],
                 'port_id': port_id,
@@ -2697,6 +2925,7 @@ class DBInterface(object):
         port_obj = self._virtual_machine_interface_read(port_id)
         router_obj.del_virtual_machine_interface(port_obj)
         self._vnc_lib.logical_router_update(router_obj)
+        self._clear_snat_routing_table(router_id, subnet['network_id'])
         self.port_delete(port_id)
         info = {'id': router_id,
             'tenant_id': subnet['tenant_id'],
