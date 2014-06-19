@@ -366,6 +366,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_subnet(): " + pformat(subnet_dict))
             return subnet_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='subnet', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -473,6 +475,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_ipam(): " + pformat(ipam_dict))
             return ipam_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='ipam', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -581,6 +585,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_policy(): " + pformat(policy_dict))
             return policy_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='policy', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -708,6 +714,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_router(): " + pformat(router_dict) + "\n")
             return router_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='router', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -865,6 +873,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_floatingip(): " + pformat(fip_dict))
             return fip_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='floatingip', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -967,6 +977,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_port(): " + pformat(port_dict))
             return port_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='port', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -1125,6 +1137,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
             rt_dict.update(rt_info['q_extra_data'])
             LOG.debug("create_route_table(): " + pformat(rt_dict))
             return rt_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='route_table', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -1219,6 +1233,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_nat_instance(): " + pformat(si_dict))
             return si_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='nat_instance', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -1310,6 +1326,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_security_group(): " + pformat(sg_dict))
             return sg_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='security_group', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
@@ -1399,6 +1417,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("create_security_group_rule(): " + pformat(sgr_dict))
             return sgr_dict
+        except RefsExistError as e:
+            raise exc.BadRequest(resource='security_group_rule', msg=str(e))
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e
