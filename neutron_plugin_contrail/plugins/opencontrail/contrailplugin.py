@@ -538,7 +538,7 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
     def get_ipams(self, context, filters=None, fields=None):
         try:
             cfgdb = ContrailPlugin._get_user_cfgdb(context)
-            ipams_info = cfgdb.ipam_list(filters)
+            ipams_info = cfgdb.ipam_list(context, filters)
 
             ipams_dicts = []
             for ipam_info in ipams_info:
@@ -648,7 +648,7 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
     def get_policys(self, context, filters=None, fields=None):
         try:
             cfgdb = ContrailPlugin._get_user_cfgdb(context)
-            policys_info = cfgdb.policy_list(filters)
+            policys_info = cfgdb.policy_list(context, filters)
 
             policys_dicts = []
             for policy_info in policys_info:
@@ -779,7 +779,7 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
     def get_routers(self, context, filters=None, fields=None):
         try:
             cfgdb = ContrailPlugin._get_user_cfgdb(context)
-            rtrs_info = cfgdb.router_list(filters)
+            rtrs_info = cfgdb.router_list(context, filters)
 
             rtrs_dicts = []
             for r_info in rtrs_info:
@@ -1439,7 +1439,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
             cfgdb = ContrailPlugin._get_user_cfgdb(context)
             if not context.is_admin:
                 filters['tenant_id'] = [str(context.tenant)]
-            security_group_rules_info = cfgdb.security_group_rule_list(filters)
+            security_group_rules_info = cfgdb.security_group_rule_list(context,
+                                                                       filters)
 
             security_group_rules_dicts = []
             for sgr_info in security_group_rules_info:
