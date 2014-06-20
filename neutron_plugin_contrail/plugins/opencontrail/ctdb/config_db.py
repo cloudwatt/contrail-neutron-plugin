@@ -1729,6 +1729,11 @@ class DBInterface(object):
                 mac_addrs_obj = MacAddressesType()
                 mac_addrs_obj.set_mac_address(port_q['mac_address'])
                 port_obj.set_virtual_machine_interface_mac_addresses(mac_addrs_obj)
+            port_obj.set_security_group_list([])
+            if ('security_groups' not in port_q or
+                port_q['security_groups'].__class__ is object):
+                sg_obj = SecurityGroup("default", proj_obj)
+                port_obj.add_security_group(sg_obj)
         else:  # READ/UPDATE/DELETE
             port_obj = self._virtual_machine_interface_read(
                 port_id=port_q['id'], fields=['instance_ip_back_refs',
@@ -1741,9 +1746,9 @@ class DBInterface(object):
                 instance_obj = self._ensure_instance_exists(instance_name)
                 port_obj.set_virtual_machine(instance_obj)
 
-        port_obj.set_security_group_list([])
         if ('security_groups' in port_q and
             port_q['security_groups'].__class__ is not object):
+            port_obj.set_security_group_list([])
             for sg_id in port_q['security_groups'] or []:
                 # TODO optimize to not read sg (only uuid/fqn needed)
                 sg_obj = self._vnc_lib.security_group_read(id=sg_id)
@@ -2149,12 +2154,6 @@ class DBInterface(object):
                 msg = _("Gateway disabling is not supported")
                 raise exceptions.BadRequest(resource='subnet', msg=msg)
  
-        if 'host_routes' in subnet_q:
-            if subnet_q['host_routes'] != attr.ATTR_NOT_SPECIFIED:
-                # return exception. This attribute is not supported yet
-                msg = _("update of host-routes is not supported")
-                raise exceptions.BadRequest(resource='subnet', msg=msg) 
-
         if 'allocation_pools' in subnet_q:
             if subnet_q['allocation_pools'] != attr.ATTR_NOT_SPECIFIED:
                 # return exception. This attribute is not supported yet
@@ -2185,7 +2184,25 @@ class DBInterface(object):
         
                     if 'dns_nameservers' in subnet_q:
                         if subnet_q['dns_nameservers'] != attr.ATTR_NOT_SPECIFIED:
-                            subnet_vnc.set_dns_nameservers(subnet_q['dns_nameservers'])
+                            dhcp_options=[]
+                            for dns_server in subnet_q['dns_nameservers']:
+                                dhcp_options.append(DhcpOptionType(dhcp_option_name='6',
+                                                                   dhcp_option_value=dns_server))
+                            if dhcp_options:
+                                subnet_vnc.set_dhcp_option_list(DhcpOptionsListType(dhcp_options))
+                            else:
+                                subnet_vnc.set_dhcp_option_list(None)
+ 
+                    if 'host_routes' in subnet_q:
+                        if subnet_q['host_routes'] != attr.ATTR_NOT_SPECIFIED:
+                            host_routes=[]
+                            for host_route in subnet_q['host_routes']:
+                                host_routes.append(RouteType(prefix=host_route['destination'],
+                                                             next_hop=host_route['nexthop']))
+                            if host_routes:
+                                subnet_vnc.set_host_routes(RouteTableType(host_routes))
+                            else:
+                                subnet_vnc.set_host_routes(None)
                 
                     net_obj._pending_field_updates.add('network_ipam_refs')
                     self._virtual_network_update(net_obj)
