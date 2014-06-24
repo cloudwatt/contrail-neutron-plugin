@@ -673,6 +673,8 @@ class DBInterface(object):
         if project_id:
             try:
                 project_uuid = str(uuid.UUID(project_id))
+                # Trigger a project read to ensure project sync
+                project_obj = self._project_read(proj_id=project_uuid)
             except Exception:
                 print "Error in converting uuid %s" % (project_id)
         else:
@@ -1653,13 +1655,11 @@ class DBInterface(object):
             # TODO for now create from default pool, later
             # use first available pool on net
             net_id = fip_q['floating_network_id']
-            try:
-                fq_name = self._fip_pool_list_network(net_id)[0]['fq_name']
-            except IndexError:
-                # IndexError could happens when an attempt to
-                # retrieve a floating ip pool from a private network.
-                raise Exception(
-                    "Network %s doesn't provide a floatingip pool", net_id)
+            fip_pool_list = self._fip_pool_list_network(net_id)
+            if not fip_pool_list:
+                raise exceptions.BadRequest(resource="floatingip",
+                    msg="Network %s is not a valid external network" % net_id)
+            fq_name = fip_pool_list[0]['fq_name']
             fip_pool_obj = self._vnc_lib.floating_ip_pool_read(fq_name=fq_name)
             fip_name = str(uuid.uuid4())
             fip_obj = FloatingIp(fip_name, fip_pool_obj)
@@ -2002,6 +2002,12 @@ class DBInterface(object):
                     net_info = self._network_vnc_to_neutron(net,
                                                             net_repr='LIST')
                     ret_dict[net.uuid] = net_info
+        elif filters and 'router:external' in filters:
+            nets = self._network_list_router_external()
+            if filters['router:external'][0] == True:
+                for net in nets:
+                    net_info = self._network_vnc_to_neutron(net, net_repr='LIST')
+                    ret_dict[net.uuid] = net_info
         else:
             # read all networks in all projects
             all_net_objs.extend(self._virtual_network_list(detail=True))
@@ -2187,7 +2193,7 @@ class DBInterface(object):
                                 subnet_vnc.set_dhcp_option_list(DhcpOptionsListType(dhcp_options))
                             else:
                                 subnet_vnc.set_dhcp_option_list(None)
- 
+
                     if 'host_routes' in subnet_q:
                         if subnet_q['host_routes'] != attr.ATTR_NOT_SPECIFIED:
                             host_routes=[]
