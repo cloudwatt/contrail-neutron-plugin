@@ -1649,12 +1649,6 @@ class DBInterface(object):
         rtr_q_dict['shared'] = False
         rtr_q_dict['status'] = constants.NET_STATUS_ACTIVE
         rtr_q_dict['gw_port_id'] = None
-        try:
-            gw_info = self._vnc_lib.kv_retrieve(
-                key='ext_gateway_info:' + rtr_obj.uuid)
-            rtr_q_dict['gw_port_id'] = {'network_id': gw_info}
-        except NoIdError:
-            pass
         return {'q_api_data': rtr_q_dict,
                 'q_extra_data': extra_dict}
     #end _router_vnc_to_neutron
@@ -2475,15 +2469,14 @@ class DBInterface(object):
     def router_create(self, router_q):
         #self._ensure_project_exists(router_q['tenant_id'])
 
-        rtr_obj = self._router_neutron_to_vnc(router_q, CREATE)
-        rtr_uuid = self._logical_router_create(rtr_obj)
-
         ext_gateway = router_q.get('external_gateway_info', None)
         if ext_gateway:
-            network_id = ext_gateway.get('network_id')
-            if network_id:
-                self._vnc_lib.kv_store('ext_gateway_info:' + rtr_uuid,
-                                       network_id)
+            msg = _("Set or clear the default gateway is not yet supported")
+            raise exceptions.BadRequest(resource='router', msg=msg)
+
+        rtr_obj = self._router_neutron_to_vnc(router_q, CREATE)
+        rtr_uuid = self._logical_router_create(rtr_obj)
+            
         ret_router_q = self._router_vnc_to_neutron(rtr_obj, rtr_repr='SHOW')
         self._db_cache['q_routers'][rtr_uuid] = ret_router_q
 
@@ -2510,6 +2503,11 @@ class DBInterface(object):
                 msg = _("Router name cannot be modified")
                 raise exceptions.BadRequest(resource='router', msg=msg)
 
+        ext_gateway = router_q.get('external_gateway_info', None)
+        if ext_gateway:
+            msg = _("Set or clear the default gateway is not yet supported")
+            raise exceptions.BadRequest(resource='router', msg=msg)
+
         router_q['id'] = rtr_id
         rtr_obj = self._router_neutron_to_vnc(router_q, UPDATE)
         self._logical_router_update(rtr_obj)
@@ -2522,7 +2520,6 @@ class DBInterface(object):
 
     def router_delete(self, rtr_id):
         self._logical_router_delete(rtr_id=rtr_id)
-        self._vnc_lib.kv_delete(key='ext_gateway_info:' + rtr_id)
         try:
             del self._db_cache['q_routers'][rtr_id]
         except KeyError:
