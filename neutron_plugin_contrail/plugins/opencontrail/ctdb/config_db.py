@@ -1503,7 +1503,7 @@ class DBInterface(object):
         sn_id = self._subnet_vnc_read_or_create_mapping(key=subnet_key)
 
         sn_q_dict['id'] = sn_id
-        
+
         sn_q_dict['gateway_ip'] = subnet_vnc.default_gateway
         alloc_obj_list = subnet_vnc.get_allocation_pools()
         allocation_pools = []
@@ -3020,9 +3020,11 @@ class DBInterface(object):
 
                 # read all VMI and IIP in detail one-shot
                 all_port_greenlet = eventlet.spawn(
-                    self._virtual_machine_interface_list)
+                    self._virtual_machine_interface_list,
+                    parent_id=project_id)
                 port_iip_greenlet = eventlet.spawn(self._instance_ip_list)
                 port_net_greenlet = eventlet.spawn(self._virtual_network_list,
+                                                   parent_id=project_id,
                                                    detail=True)
 
                 all_port_objs = all_port_greenlet.wait()
