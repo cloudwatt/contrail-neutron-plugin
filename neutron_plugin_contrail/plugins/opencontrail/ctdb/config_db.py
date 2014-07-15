@@ -2130,15 +2130,14 @@ class DBInterface(object):
         # api-server
         subnet_id = str(uuid.uuid4())
         self._subnet_vnc_create_mapping(subnet_id, subnet_key)
-        # store the subnet name in the kv store
-        subnet_name = subnet_q.get('name', '')
-        self._vnc_lib.kv_store('subnet_name:' + subnet_id, subnet_name)
+
         # Read in subnet from server to get updated values for gw etc.
         subnet_vnc = self._subnet_read(net_obj.uuid, subnet_key)
         subnet_info = self._subnet_vnc_to_neutron(subnet_vnc, net_obj,
                                                   ipam_fq_name)
 
         #self._db_cache['q_subnets'][subnet_id] = subnet_info
+
         return subnet_info
     #end subnet_create
 
@@ -2260,7 +2259,6 @@ class DBInterface(object):
                     except RefsExistError:
                         raise exceptions.SubnetInUse(subnet_id=subnet_id)
                     self._subnet_vnc_delete_mapping(subnet_id, subnet_key)
-                    self._vnc_lib.kv_delete(key='subnet_name:' + subnet_id)
                     try:
                         del self._db_cache['q_subnets'][subnet_id]
                     except KeyError:
@@ -2333,10 +2331,6 @@ class DBInterface(object):
                                                             sn_name):
                                 continue
 
-                            if not self._filters_is_present(filters,
-                                                            'name',
-                                                            sn_name):
-                                continue
                         ret_subnets.append(sn_info)
 
         return ret_subnets
