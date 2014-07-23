@@ -2827,6 +2827,50 @@ class DBInterface(object):
             return True
         return False
 
+    def _get_subnet_host_route(self, fixed_ips, net_obj):
+        """This function returns the host route destination prefix
+        if the 'fixed_ips' matches with the next hop of one
+        of the subnets of the net_obj.
+        """
+        ipam_refs = net_obj.get_network_ipam_reyfs()
+        if ipam_refs is None:
+            return
+
+        for ipam_ref in ipam_refs:
+            subnets = ipam_ref['attr'].get_ipam_subnets()
+            for subnet in subnets:
+                host_routes = subnet.get_host_routes()
+                if host_routes is None:
+                    continue
+                for host_route in host_routes.route:
+                    for fixed_ip in fixed_ips:
+                        if fixed_ip['ip_address'] == host_route.get_next_hop():
+                            return host_route.get_prefix()
+
+    def _add_static_route_to_port(self, port_obj, prefix, proj_id):
+        """This function adds the interface route table to the 
+        port_obj.
+        """
+        project_obj = self._project_read(proj_id=proj_id)
+        route_table = RouteTableType(port_obj.name)
+        route_table.set_route([])
+        intf_route_table = InterfaceRouteTable(
+                                interface_route_table_routes = route_table,
+                                parent_obj=project_obj,
+                                name=port_obj.name)
+
+        intf_route_table_id = self._vnc_lib.interface_route_table_create(
+                                    intf_route_table)
+        intf_route_table_obj = self._vnc_lib.interface_route_table_read(
+                                    id = intf_route_table_id)
+        rt_routes = intf_route_table_obj.get_interface_route_table_routes()
+        routes = rt_routes.get_route()
+        routes.append(RouteType(prefix = prefix))
+        intf_route_table_obj.set_interface_route_table_routes(rt_routes)
+        self._vnc_lib.interface_route_table_update(intf_route_table_obj)
+        port_obj.set_interface_route_table(intf_route_table_obj)
+        self._vnc_lib.virtual_machine_interface_update(port_obj)
+
     # port api handlers
     def port_create(self, port_q):
         net_id = port_q['network_id']
@@ -2889,6 +2933,12 @@ class DBInterface(object):
         port_obj = self._virtual_machine_interface_read(port_id=port_id)
 
         ret_port_q = self._port_vnc_to_neutron(port_obj)
+
+        route_prefix = self._get_subnet_host_route(ret_port_q['q_api_data']
+                                                   ['fixed_ips'],
+                                                   net_obj)
+        if route_prefix:
+            self._add_static_route_to_port(port_obj, route_prefix, proj_id)
         #self._db_cache['q_ports'][port_id] = ret_port_q
         self._set_obj_tenant_id(port_id, proj_id)
 
@@ -2968,8 +3018,16 @@ class DBInterface(object):
             for fip_back_ref in fip_back_refs:
                 self.floatingip_update(fip_back_ref['uuid'], {'port_id': None})
 
+        #delete any statis routes associatd with the port
+        int_rt_refs = getattr(port_obj, 'interface_route_table_refs', None)                
         self._virtual_machine_interface_delete(port_id=port_id)
-
+        if int_rt_refs:
+            for rt_ref in int_rt_refs:
+                try:
+                    self._vnc_lib.interface_route_table_delete(id=rt_ref['uuid'])
+                except vnc_exc.NoIdError:
+                    pass
+        
         # delete instance if this was the last port
         try:
             if instance_id:
