@@ -1891,8 +1891,62 @@ class DBInterface(object):
                 'q_extra_data': sg_dict}
     #end _port_vnc_to_neutron
 
+    def _port_get_host_prefixes(self, host_routes, subnet_cidr):
+        """This function returns the host prefixes 
+        Eg. If host_routes have the below routes
+           ---------------------------
+           |destination   | next hop  |
+           ---------------------------
+           |  10.0.0.0/24 | 8.0.0.2   |
+           |  12.0.0.0/24 | 10.0.0.4  |
+           |  14.0.0.0/24 | 12.0.0.23 |
+           |  16.0.0.0/24 | 8.0.0.4   |
+           |  15.0.0.0/24 | 16.0.0.2  |
+           |  20.0.0.0/24 | 8.0.0.12  |
+           ---------------------------
+           subnet_cidr is 8.0.0.0/24
+           
+           This function returns the dictionary
+           '8.0.0.2' : ['10.0.0.0/24', '12.0.0.0/24', '14.0.0.0/24']
+           '8.0.0.4' : ['16.0.0.0/24', '15.0.0.0/24']
+           '8.0.0.12': ['20.0.0.0/24']
+        """
+        temp_host_routes = list(host_routes)
+        cidr_ip_set = IPSet([subnet_cidr])
+        host_route_dict = {}
+        for route in temp_host_routes[:]:
+            next_hop = route.get_next_hop()
+            if IPAddress(next_hop) in cidr_ip_set:
+                if next_hop in host_route_dict:
+                    host_route_dict[next_hop].append(route.get_prefix())
+                else:
+                    host_route_dict[next_hop] = [route.get_prefix()]
+                temp_host_routes.remove(route)
+        
+        # look for indirect routes
+        if len(temp_host_routes):
+            for ipaddr  in host_route_dict.iterkeys():
+                self._port_update_prefixes(ipaddr, host_route_dict[ipaddr],
+                                           temp_host_routes)
+        return host_route_dict
+                        
+    def _port_update_prefixes(self, ipaddr, matched_route_lst,
+                              unmatched_host_routes):
+        process_host_routes = True
+        while process_host_routes:
+            process_host_routes= False
+            for route in unmatched_host_routes:
+                ip_addr = route.get_next_hop()
+                new_route_found = False
+                for matched_route in matched_route_lst:
+                    if IPAddress(ip_addr) in IPSet([matched_route]):
+                        matched_route_lst.append(route.get_prefix())
+                        unmatched_host_routes.remove(route)
+                        process_host_routes = True
+                        break
+
     def _port_check_and_add_iface_route_table(self, fixed_ips, net_obj,
-                                              port_obj, proj_id):
+                                              port_obj):
         ipam_refs = net_obj.get_network_ipam_refs()
         if ipam_refs is None:
             return
@@ -1905,52 +1959,20 @@ class DBInterface(object):
                     continue
                 subnet_key = self._subnet_vnc_get_key(subnet, net_obj.uuid)
                 sn_id = self._subnet_vnc_read_mapping(key=subnet_key)
-                
+                subnet_cidr = '%s/%s' % (subnet.subnet.get_ip_prefix(),
+                                         subnet.subnet.get_ip_prefix_len())
                 for fixed_ip in fixed_ips:
                     if fixed_ip['subnet_id'] == sn_id:
                         ip_addr = fixed_ip['ip_address']
-                        self._port_add_iface_route_table(host_routes.route,
-                                                         port_obj, ip_addr,
-                                                         proj_id=proj_id) 
+                        host_prefixes = self._port_get_host_prefixes(host_routes.route,
+                                                                     subnet_cidr)
+                        if ip_addr in host_prefixes:
+                            self._port_add_iface_route_table(host_prefixes[ip_addr],
+                                                             port_obj, net_obj) 
 
 
-    def _port_add_iface_route_table(self, host_routes, port_obj, ip_addr,
-                                  net_obj=None, proj_id=None):
-        if net_obj is None and proj_id is None:
-            return
-
-        matched_host_routes = []
-        unmatched_host_routes = []
-        for host_route in host_routes:
-            if host_route.get_next_hop() == ip_addr:
-                matched_host_routes.append(host_route)
-            else:
-                unmatched_host_routes.append(host_route)
-        
-        if not len(matched_host_routes):
-            return
-
-        # look for indirect routes
-        process_host_routes = True
-        while process_host_routes:
-            process_host_routes= False
-            for route in unmatched_host_routes:
-                ip_addr = route.get_next_hop()
-                new_route_found = False
-                for matched_route in matched_host_routes:
-                    if IPAddress(ip_addr) in IPSet([matched_route.get_prefix()]):
-                        matched_host_routes.append(route)
-                        unmatched_host_routes.remove(route)
-                        process_host_routes = True
-                        break
-                    
-        # create the interface route table and add the routes
-        if net_obj is None:
-            project_obj = self._project_read(proj_id=proj_id)
-        else:
-            proj_fq_name = net_obj.get_fq_name()[0:2]
-            project_obj = self._project_read(fq_name=proj_fq_name)
-
+    def _port_add_iface_route_table(self, route_prefix_lst, port_obj, net_obj):
+        project_obj = self._project_read(proj_id=net_obj.parent_uuid)
         intf_rt_name = 'NEUTRON_IFACE_RT_' + str(port_obj.uuid)
         intf_rt_fq_name = list(project_obj.get_fq_name())
         intf_rt_fq_name.append(intf_rt_name)
@@ -1973,35 +1995,59 @@ class DBInterface(object):
 
         rt_routes = intf_route_table_obj.get_interface_route_table_routes()
         routes = rt_routes.get_route()
-        for host_route in matched_host_routes:
-            route_type = RouteType(prefix = host_route.get_prefix())
-            routes.append(route_type)
+        for prefix in route_prefix_lst:
+            routes.append(RouteType(prefix = prefix))
         intf_route_table_obj.set_interface_route_table_routes(rt_routes)
         self._vnc_lib.interface_route_table_update(intf_route_table_obj)
         port_obj.set_interface_route_table(intf_route_table_obj)
         self._vnc_lib.virtual_machine_interface_update(port_obj)
 
-    def _port_update_iface_route_table(self, subnet_vnc, old_host_routes,
-                                        new_host_routes, net_obj):
-         # get the list of all the ip objs for this network
-        ipobjs = self._instance_ip_list(back_ref_id=[net_obj.uuid])
-        old_ips = []
+    def _port_update_iface_route_table(self, net_obj, subnet_cidr,
+                                       new_host_routes, old_host_routes=None):
+        add_host_routes = list(new_host_routes)
+        old_host_prefixes = {}
         if old_host_routes:
-            old_ips = [route.get_next_hop() for route in old_host_routes.route]
-        new_ips = [route.get_next_hop() for route in new_host_routes]
+            old_host_prefixes = self._port_get_host_prefixes(old_host_routes.route, subnet_cidr)
+        new_host_prefixes = self._port_get_host_prefixes(new_host_routes, subnet_cidr)
+        
+        for ipaddr, prefixes in old_host_prefixes.items():
+            already_exists = True
+            if ipaddr in new_host_prefixes:
+                if len(prefixes) == len(new_host_prefixes[ipaddr]):
+                    for prefix in prefixes:
+                        if prefix not in new_host_prefixes[ipaddr]:
+                            already_exists = False
+                            break
+                else:
+                    already_exists = False
+            else:
+                already_exists = False
+
+            if already_exists:
+                # delete from both the old_host_routes and new_host_routes
+                old_host_prefixes.pop(ipaddr)
+                new_host_prefixes.pop(ipaddr)
+                            
+        if len(new_host_prefixes) == 0 and len(old_host_prefixes) == 0:
+            # nothing to be done as old_host_routes and  
+            # new_host_routes match exactly
+            return
+
+        # get the list of all the ip objs for this network
+        ipobjs = self._instance_ip_list(back_ref_id=[net_obj.uuid])
         for ipobj in ipobjs:
             ipaddr = ipobj.get_instance_ip_address()
-            if ipaddr in old_ips:
+            if ipaddr in old_host_prefixes:
                 self._port_remove_iface_route_table(ipobj)
 
-            if ipaddr in new_ips:
+            if ipaddr in new_host_prefixes:
                 port_objs = ipobj.get_virtual_machine_interface_refs()
                 # TODO need to handle the case when the ip address
                 # is shared between two port_objs 
                 port_obj = self._virtual_machine_interface_read(
                                     port_id=port_objs[0]['uuid'])
-                self._port_add_iface_route_table(new_host_routes, port_obj,
-                                                 ipaddr, net_obj)
+                self._port_add_iface_route_table(new_host_prefixes[ipaddr], port_obj,
+                                                 net_obj)
                 
     def _port_remove_iface_route_table(self, ipobj):
         port_objs = ipobj.get_virtual_machine_interface_refs()
@@ -2009,18 +2055,16 @@ class DBInterface(object):
         # is shared between two port_objs
         if port_objs:
             port_obj = self._virtual_machine_interface_read(port_id=port_objs[0]['uuid'])
-            # delete any interface route table associatd with the port
-            int_rt_refs = getattr(port_obj, 'interface_route_table_refs', None)   
-            if int_rt_refs:
-                for rt_ref in int_rt_refs:
-                    try:
-                        intf_route_table_obj = self._vnc_lib.interface_route_table_read(
-                                                                       id=rt_ref['uuid'])
-                        port_obj.del_interface_route_table(intf_route_table_obj)
-                        self._vnc_lib.virtual_machine_interface_update(port_obj)
-                        self._vnc_lib.interface_route_table_delete(id=rt_ref['uuid'])
-                    except vnc_exc.NoIdError:
-                        pass
+            # delete any interface route table associated with the port
+            for rt_ref in port_obj.get_interface_route_table_refs() or []:
+                try:
+                    intf_route_table_obj = self._vnc_lib.interface_route_table_read(
+                                                                   id=rt_ref['uuid'])
+                    port_obj.del_interface_route_table(intf_route_table_obj)
+                    self._vnc_lib.virtual_machine_interface_update(port_obj)
+                    self._vnc_lib.interface_route_table_delete(id=rt_ref['uuid'])
+                except vnc_exc.NoIdError:
+                    pass
 
     # public methods
     # network api handlers
@@ -2356,10 +2400,12 @@ class DBInterface(object):
                             if host_routes:
                                 old_host_routes = subnet_vnc.get_host_routes()
                                 subnet_vnc.set_host_routes(RouteTableType(host_routes))
-                                self._port_update_iface_route_table(subnet_vnc,
-                                                                     old_host_routes,
-                                                                     host_routes,
-                                                                     net_obj)
+                                subnet_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
+                                                         subnet_vnc.subnet.get_ip_prefix_len())
+                                self._port_update_iface_route_table(net_obj,
+                                                                    subnet_cidr,
+                                                                    host_routes,
+                                                                    old_host_routes)
                             else:
                                 subnet_vnc.set_host_routes(None)
                 
@@ -2963,7 +3009,7 @@ class DBInterface(object):
             return True
         return False
 
-        # port api handlers
+    # port api handlers
     def port_create(self, port_q):
         net_id = port_q['network_id']
         # TODO optimize to not read net (only uuid/fqn needed)
@@ -3029,7 +3075,7 @@ class DBInterface(object):
         # create interface route table for the port if
         # subnet has a host route for this port ip.
         self._port_check_and_add_iface_route_table(ret_port_q['q_api_data']['fixed_ips'],
-                                           net_obj, port_obj, proj_id)
+                                                   net_obj, port_obj)
         #self._db_cache['q_ports'][port_id] = ret_port_q
         self._set_obj_tenant_id(port_id, proj_id)
 
@@ -3112,12 +3158,11 @@ class DBInterface(object):
         # delete any interface route table associatd with the port
         int_rt_refs = getattr(port_obj, 'interface_route_table_refs', None)   
         self._virtual_machine_interface_delete(port_id=port_id)
-        if int_rt_refs:
-            for rt_ref in int_rt_refs:
-                try:
-                    self._vnc_lib.interface_route_table_delete(id=rt_ref['uuid'])
-                except vnc_exc.NoIdError:
-                    pass
+        for rt_ref in int_rt_refs or []:
+            try:
+                self._vnc_lib.interface_route_table_delete(id=rt_ref['uuid'])
+            except vnc_exc.NoIdError:
+                pass
         # delete instance if this was the last port
         try:
             if instance_id:
