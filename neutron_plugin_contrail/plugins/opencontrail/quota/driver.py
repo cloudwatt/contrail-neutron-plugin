@@ -153,7 +153,7 @@ class QuotaDriver(object):
             project_uuid = str(uuid.UUID(tenant_id))
             for i in range(10):
                 try:
-                    proj_obj = cfgdb._project_read(proj_id)
+                    proj_obj = cfgdb._project_read(project_uuid)
                     break
                 except Exception as e:
                     time.sleep(2)
