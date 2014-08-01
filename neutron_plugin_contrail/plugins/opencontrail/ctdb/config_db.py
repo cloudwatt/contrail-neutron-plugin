@@ -46,9 +46,11 @@ class DBInterface(object):
     Q_URL_PREFIX = '/extensions/ct'
 
     def __init__(self, admin_name, admin_password, admin_tenant_name,
-                 api_srvr_ip, api_srvr_port, user_info=None):
+                 api_srvr_ip, api_srvr_port, user_info=None,
+                 create_irt_for_host_routes=False):
         self._api_srvr_ip = api_srvr_ip
         self._api_srvr_port = api_srvr_port
+        self._create_irt_for_host_routes = create_irt_for_host_routes
 
         self._db_cache = {}
         self._db_cache['q_networks'] = {}
@@ -2400,9 +2402,10 @@ class DBInterface(object):
                             if host_routes:
                                 old_host_routes = subnet_vnc.get_host_routes()
                                 subnet_vnc.set_host_routes(RouteTableType(host_routes))
-                                subnet_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
-                                                         subnet_vnc.subnet.get_ip_prefix_len())
-                                self._port_update_iface_route_table(net_obj,
+                                if self._create_irt_for_host_routes:
+                                    subnet_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
+                                                             subnet_vnc.subnet.get_ip_prefix_len())
+                                    self._port_update_iface_route_table(net_obj,
                                                                     subnet_cidr,
                                                                     host_routes,
                                                                     old_host_routes)
@@ -3074,8 +3077,9 @@ class DBInterface(object):
         
         # create interface route table for the port if
         # subnet has a host route for this port ip.
-        self._port_check_and_add_iface_route_table(ret_port_q['q_api_data']['fixed_ips'],
-                                                   net_obj, port_obj)
+        if self._create_irt_for_host_routes:
+            self._port_check_and_add_iface_route_table(ret_port_q['q_api_data']['fixed_ips'],
+                                                       net_obj, port_obj)
         #self._db_cache['q_ports'][port_id] = ret_port_q
         self._set_obj_tenant_id(port_id, proj_id)
 
