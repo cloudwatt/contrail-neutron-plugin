@@ -40,10 +40,9 @@ vnc_opts = [
     cfg.BoolOpt('multi_tenancy', default=False),
     cfg.StrOpt('contrail_extensions', default='ipam,policy,route-table',
                help='Contrail extensions support'),
-    cfg.BoolOpt('create_irt_for_host_routes', default=True,
-                help='Create Interface Route tables for the \
-                      host routes defined in the subnet or not') 
-                      
+    cfg.BoolOpt('apply_subnet_host_routes', default=True,
+                help='Apply Neutron subnet host routes on the overlay \
+                      through the OpenContrail interface route table resource')
 ]
 
 keystone_opts = [
@@ -87,7 +86,7 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
         cls._auth_url = cfg.CONF.KEYSTONE.auth_url
 
         cls._tenants_api = '%s/tenants' % (cls._auth_url)
-        cls._create_irt_for_host_routes = cfg.CONF.APISERVER.create_irt_for_host_routes
+        cls._apply_subnet_host_routes = cfg.CONF.APISERVER.apply_subnet_host_routes
 
         # contrail extension format:
         #  contrail_extensions=ipam,policy
@@ -114,8 +113,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
                                                     cls._admin_password,
                                                     cls._admin_tenant_name,
                                                     sip, sport,
-                                                    create_irt_for_host_routes=
-                                                    cls._create_irt_for_host_routes)
+                                                    apply_subnet_host_routes=
+                                                    cls._apply_subnet_host_routes)
             cls._cfgdb.manager = cls
     #end _connect_to_db
 
