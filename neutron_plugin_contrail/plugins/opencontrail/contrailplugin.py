@@ -113,7 +113,7 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
                                                     cls._admin_password,
                                                     cls._admin_tenant_name,
                                                     sip, sport,
-                                                    apply_subnet_host_routes=
+                                                    apply_subnet_host_routes=\
                                                     cls._apply_subnet_host_routes)
             cls._cfgdb.manager = cls
     #end _connect_to_db
