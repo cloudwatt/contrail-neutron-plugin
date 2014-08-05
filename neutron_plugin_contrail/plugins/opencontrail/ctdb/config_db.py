@@ -2401,17 +2401,17 @@ class DBInterface(object):
                             for host_route in subnet_q['host_routes']:
                                 host_routes.append(RouteType(prefix=host_route['destination'],
                                                              next_hop=host_route['nexthop']))
-                            if host_routes:
+                            if self._apply_subnet_host_routes:
                                 old_host_routes = subnet_vnc.get_host_routes()
+                                subnet_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
+                                                         subnet_vnc.subnet.get_ip_prefix_len())
+                                self._port_update_iface_route_table(net_obj,
+                                                                    subnet_cidr,
+                                                                    subnet_id,
+                                                                    host_routes,
+                                                                    old_host_routes)
+                            if host_routes:
                                 subnet_vnc.set_host_routes(RouteTableType(host_routes))
-                                if self._apply_subnet_host_routes:
-                                    subnet_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
-                                                             subnet_vnc.subnet.get_ip_prefix_len())
-                                    self._port_update_iface_route_table(net_obj,
-                                                                        subnet_cidr,
-                                                                        subnet_id,
-                                                                        host_routes,
-                                                                        old_host_routes)
                             else:
                                 subnet_vnc.set_host_routes(None)
                 
