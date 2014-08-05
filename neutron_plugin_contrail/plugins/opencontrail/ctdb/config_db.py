@@ -1433,6 +1433,9 @@ class DBInterface(object):
             cidr = netaddr.IPNetwork(subnet_q['cidr'])
             pfx = str(cidr.network)
             pfx_len = int(cidr.prefixlen)
+            if cidr.version != 4:
+                msg = _("IPv6 is not supported")
+                raise exceptions.BadRequest(resource='subnet', msg=msg)
         except AddrFormatError:
             msg = _("Invalid CIDR format")
             raise exceptions.BadRequest(resource='subnet', msg=msg)
