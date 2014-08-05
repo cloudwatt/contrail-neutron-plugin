@@ -1973,7 +1973,7 @@ class DBInterface(object):
 
     def _port_add_iface_route_table(self, route_prefix_list, port_obj,
                                     subnet_id):
-        project_obj = self._project_read(fq_name=port_obj.get_fq_name()[0:2])
+        project_obj = self._project_read(proj_id=port_obj.parent_uuid)
         intf_rt_name = '%s_%s_%s' % (_IFACE_ROUTE_TABLE_NAME_PREFIX,
                                      subnet_id, port_obj.uuid)
         intf_rt_fq_name = list(project_obj.get_fq_name())
