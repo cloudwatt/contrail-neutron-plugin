@@ -1940,7 +1940,6 @@ class DBInterface(object):
             process_host_routes = False
             for route in unmatched_host_routes:
                 ip_addr = IPAddress(route.get_next_hop())
-                new_route_found = False
                 if ip_addr in IPSet(matched_route_list):
                     matched_route_list.append(route.get_prefix())
                     unmatched_host_routes.remove(route)
