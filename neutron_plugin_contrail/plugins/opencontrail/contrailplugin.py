@@ -40,6 +40,9 @@ vnc_opts = [
     cfg.BoolOpt('multi_tenancy', default=False),
     cfg.StrOpt('contrail_extensions', default='ipam,policy,route-table',
                help='Contrail extensions support'),
+    cfg.BoolOpt('apply_subnet_host_routes', default=False,
+                help='Apply Neutron subnet host routes on the overlay \
+                      through the OpenContrail interface route table resource')
 ]
 
 keystone_opts = [
@@ -83,7 +86,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
         cls._auth_url = cfg.CONF.KEYSTONE.auth_url
 
         cls._tenants_api = '%s/tenants' % (cls._auth_url)
-        
+        cls._apply_subnet_host_routes = cfg.CONF.APISERVER.apply_subnet_host_routes
+
         # contrail extension format:
         #  contrail_extensions=ipam,policy
         ext_aliases = ContrailPlugin.supported_extension_aliases
@@ -108,7 +112,9 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
             cls._cfgdb = ctdb.config_db.DBInterface(cls._admin_user,
                                                     cls._admin_password,
                                                     cls._admin_tenant_name,
-                                                    sip, sport)
+                                                    sip, sport,
+                                                    apply_subnet_host_routes=\
+                                                    cls._apply_subnet_host_routes)
             cls._cfgdb.manager = cls
     #end _connect_to_db
 
@@ -123,7 +129,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
                 cls._admin_user, cls._admin_password, cls._admin_tenant_name,
                 cfg.CONF.APISERVER.api_server_ip,
                 cfg.CONF.APISERVER.api_server_port,
-                user_info={'user_id': user_id, 'role': role})
+                user_info={'user_id': user_id, 'role': role},
+                apply_subnet_host_routes=cls._apply_subnet_host_routes)
             cls._cfgdb_map[user_id].manager = cls
 
         return cls._cfgdb_map[user_id]
