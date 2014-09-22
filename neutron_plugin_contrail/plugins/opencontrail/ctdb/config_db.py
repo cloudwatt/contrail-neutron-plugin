@@ -2701,8 +2701,8 @@ class DBInterface(object):
 
         try:
             rtr_obj = self._logical_router_read(rtr_uuid)
-        except NoIdError:
-            raise exceptions.RouterNotFound(rtr_id=rtr_uuid)
+        except NoIdError as e:
+            raise e
 
         return self._router_vnc_to_neutron(rtr_obj, rtr_repr='SHOW')
     #end router_read
