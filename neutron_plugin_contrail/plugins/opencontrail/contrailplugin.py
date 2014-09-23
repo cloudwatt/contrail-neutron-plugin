@@ -22,6 +22,7 @@ from neutron_plugin_contrail.extensions import vpcroutetable
 from neutron.openstack.common import log as logging
 
 from cfgm_common.exceptions import RefsExistError
+from cfgm_common.exceptions import NoIdError
 
 from oslo.config import cfg
 from httplib2 import Http
@@ -745,6 +746,8 @@ class ContrailPlugin(db_base_plugin_v2.NeutronDbPluginV2,
 
             LOG.debug("get_router(): " + pformat(router_dict))
             return self._fields(router_dict, fields)
+        except NoIdError:
+            raise l3.RouterNotFound(router_id=id)
         except Exception as e:
             cgitb.Hook(format="text").handle(sys.exc_info())
             raise e

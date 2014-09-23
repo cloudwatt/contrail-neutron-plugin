@@ -2699,11 +2699,7 @@ class DBInterface(object):
             tenant_id = self._get_obj_tenant_id('router', rtr_uuid)
             return {'q_api_data': {'id': rtr_uuid, 'tenant_id': tenant_id}}
 
-        try:
-            rtr_obj = self._logical_router_read(rtr_uuid)
-        except NoIdError:
-            raise exceptions.RouterNotFound(rtr_id=rtr_uuid)
-
+        rtr_obj = self._logical_router_read(rtr_uuid)
         return self._router_vnc_to_neutron(rtr_obj, rtr_repr='SHOW')
     #end router_read
 
