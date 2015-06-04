@@ -74,6 +74,7 @@ CONTRAIL_EXCEPTION_MAP = {
     requests.codes.bad_request: ContrailBadRequestError,
     requests.codes.service_unavailable: ContrailServiceUnavailableError,
     requests.codes.unauthorized: ContrailNotAuthorizedError,
+    requests.codes.request_timeout: ContrailServiceUnavailableError,
 }
 
 
