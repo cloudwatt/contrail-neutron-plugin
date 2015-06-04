@@ -76,7 +76,6 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
     PLUGIN_URL_PREFIX = '/neutron'
 
     def _build_auth_details(self):
-        LOG.debug("NUMAN : _build_auth_details entered")
         #keystone
         self._authn_token = None
         if cfg.CONF.auth_strategy == 'keystone':
@@ -86,7 +85,6 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
             body += ' "password": "%s"},' % (kcfg.admin_password)
             body += ' "tenantName":"%s"}}' % (kcfg.admin_tenant_name)
 
-            LOG.debug("NUMAN : body = %s", body)
             self._authn_body = body
             self._authn_token = cfg.CONF.keystone_authtoken.admin_token
             self._keystone_url = "%s://%s:%s%s" % (
@@ -94,7 +92,6 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
                 cfg.CONF.keystone_authtoken.auth_host,
                 cfg.CONF.keystone_authtoken.auth_port,
                 "/v2.0/tokens")
-            LOG.debug("NUMAN : keystone_url = %s", self._keystone_url)
 
 
     def _request_api_server(self, url, data=None, headers=None):
@@ -280,7 +277,7 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
                   {'res_type': res_type, 'res_count': res_count})
         return res_count
 
-    
+
     def add_router_interface(self, context, router_id, interface_info):
         """Add interface to a router."""
 

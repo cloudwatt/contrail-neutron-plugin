@@ -140,7 +140,7 @@ class NeutronPluginContrailCoreBase(neutron_plugin_base_v2.NeutronPluginBaseV2,
         self._build_auth_details()
 
     def _build_auth_details(self):
-        LOG.debug("NUMAN : _build_auth_details entered : crap crap crap")
+        pass
 
     def __init__(self):
         super(NeutronPluginContrailCoreBase, self).__init__()
@@ -521,4 +521,4 @@ class NeutronPluginContrailCoreBase(neutron_plugin_base_v2.NeutronPluginBaseV2,
         return self._list_resource('security_group_rule', context,
                                    filters, fields)
 
-    
+

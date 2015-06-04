@@ -91,7 +91,6 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         self._prepare_res_handlers()
 
     def _connect_to_vnc_server(self):
-        LOG.debug("NUMAN : Entered _connect_to_vnc_server")
         admin_user = cfg.CONF.keystone_authtoken.admin_user
         admin_password = cfg.CONF.keystone_authtoken.admin_password
         admin_tenant_name = cfg.CONF.keystone_authtoken.admin_tenant_name
@@ -216,7 +215,7 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         res_count = self._res_handlers[res_type].resource_count(
             self._get_context_dict(context), filters)
         return {'count': res_count}
-    
+
     def add_router_interface(self, context, router_id, interface_info):
         """Add interface to a router."""
 
