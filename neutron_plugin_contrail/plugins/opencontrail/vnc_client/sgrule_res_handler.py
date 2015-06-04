@@ -115,7 +115,7 @@ class SecurityGroupRuleGetHandler(res_handler.ResourceGetHandler,
     def resource_get(self, context, sgr_id):
         project_uuid = None
         if not context['is_admin']:
-            project_uuid = str(uuid.UUID(context['tenant_id']))
+            project_uuid = str(uuid.UUID(context['tenant']))
 
         sg_obj, sg_rule = self._security_group_rule_find(sgr_id, project_uuid)
         if sg_obj and sg_rule:
@@ -189,7 +189,7 @@ class SecurityGroupRuleDeleteHandler(res_handler.ResourceDeleteHandler,
     def resource_delete(self, context, sgr_id):
         project_uuid = None
         if not context['is_admin']:
-            project_uuid = str(uuid.UUID(context['tenant_id']))
+            project_uuid = str(uuid.UUID(context['tenant']))
 
         sg_obj, sg_rule = self._security_group_rule_find(sgr_id, project_uuid)
         if sg_obj and sg_rule:

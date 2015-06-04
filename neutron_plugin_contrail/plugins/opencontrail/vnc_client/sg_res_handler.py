@@ -86,13 +86,13 @@ class SecurityGroupMixin(object):
                 dst_ports=[vnc_api.PortType(0, 65535)],
                 ethertype=ethertype)
             return rule
-    
+
         rules = [_get_rule(True, 'default', None, 'IPv4'),
                  _get_rule(True, 'default', None, 'IPv6'),
                  _get_rule(False, None, '0.0.0.0', 'IPv4'),
                  _get_rule(False, None, '::', 'IPv6')]
         sg_rules = vnc_api.PolicyEntriesType(rules)
-    
+
         # create security group
         sg_obj = self._vnc_api.SecurityGroup(
             name='default', parent_obj=proj_obj,
@@ -151,7 +151,7 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
         # collect phase
-        self._ensure_default_security_group_exists(context['tenant_id'])
+        self._ensure_default_security_group_exists(context['tenant'])
 
         all_sgs = []  # all sgs in all projects
         if context and not context['is_admin']:
@@ -193,7 +193,7 @@ class SecurityGroupDeleteHandler(SecurityGroupBaseGet,
         try:
             sg_obj = self._resource_get(id=sg_id)
             if sg_obj.name == 'default' and (
-               str(uuid.UUID(context['tenant_id'])) == sg_obj.parent_uuid):
+               str(uuid.UUID(context['tenant'])) == sg_obj.parent_uuid):
                 # Deny delete if the security group name is default and
                 # the owner of the SG is deleting it.
                 self._raise_contrail_exception(

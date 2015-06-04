@@ -108,7 +108,7 @@ class LogicalRouterMixin(object):
                 fq_name=SNAT_SERVICE_TEMPLATE_FQ_NAME)
         except vnc_exc.NoIdError:
             self._raise_contrail_exception(
-                'BadRequest', resouce='router',
+                'BadRequest', resource='router',
                 msg="Unable to set or clear the default gateway")
 
         # Get the service instance if it exists
@@ -641,7 +641,7 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
                 'subnet_id': subnet_id}
         return info
 
-    def remove_router_interface(self, router_id, port_id=None,
+    def remove_router_interface(self, context, router_id, port_id=None,
                                 subnet_id=None):
         router_obj = self._resource_get(id=router_id)
         tenant_id = None
@@ -678,7 +678,7 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
             vmi_obj = self._vnc_lib.virtual_machine_interface_read(id=port_id)
         router_obj.del_virtual_machine_interface(vmi_obj)
         self._vnc_lib.logical_router_update(router_obj)
-        self._vmi_handler.resource_delete(port_id=port_id)
+        self._vmi_handler.resource_delete(context, port_id=port_id)
         info = {'id': router_id,
                 'tenant_id': tenant_id,
                 'port_id': port_id,

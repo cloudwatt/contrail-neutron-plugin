@@ -201,7 +201,7 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
 
     def _update_resource(self, res_type, context, id, res_data):
         return self._res_handlers[res_type].resource_update(
-            self._get_context_dict(context), id, res_data)
+            self._get_context_dict(context), id, res_data[res_type])
 
     def _delete_resource(self, res_type, context, id):
         return self._res_handlers[res_type].resource_delete(
@@ -250,5 +250,5 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         rtr_iface_handler = rtr_handler.LogicalRouterInterfaceHandler(
             self._vnc_lib)
         return  rtr_iface_handler.remove_router_interface(
-            self._get_context_dict(context), router_id,
-            port_id=port_id, subnet_id=subnet_id)
+            self._get_context_dict(context), router_id, port_id=port_id,
+            subnet_id=subnet_id)

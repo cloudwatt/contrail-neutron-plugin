@@ -523,12 +523,12 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
         if context['is_admin'] and 'tenant_id' in resource:
             tenant_id = resource['tenant_id']
         elif ('tenant_id' in resource and
-              resource['tenant_id'] != context['tenant_id']):
+              resource['tenant_id'] != context['tenant']):
             reason = ('Cannot create resource for another tenant')
             self._raise_contrail_exception('AdminRequired', reason=reason,
                                            resource='port')
         else:
-            tenant_id = context['tenant_id']
+            tenant_id = context['tenant']
         return tenant_id
 
     def _validate_mac_address(self, project_id, net_id, mac_address):
@@ -696,8 +696,9 @@ class VMInterfaceDeleteHandler(res_handler.ResourceDeleteHandler,
                 instance_id = None
         if vmi_obj.get_logical_router_back_refs():
             self._raise_contrail_exception(
-                'L3PortInUse', port_id=port_id,
-                device_owner=n_constants.DEVICE_OWNER_ROUTER_INTF,
+                'PortInUse', port_id=port_id,
+                net_id=self.get_vmi_net_id(vmi_obj),
+                device_id=instance_id,
                 resource='port')
 
         # release instance IP address
