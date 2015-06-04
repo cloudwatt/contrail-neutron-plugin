@@ -16,7 +16,6 @@ import uuid
 
 from cfgm_common import exceptions as vnc_exc
 from vnc_api import vnc_api
-#import vnc_openstack
 
 import contrail_res_handler as res_handler
 import sgrule_res_handler as sgrule_handler
@@ -63,10 +62,52 @@ class SecurityGroupMixin(object):
         return sg_vnc
     # end _security_group_neutron_to_vnc
 
+    def _create_default_security_group(proj_obj):
+        def _get_rule(ingress, sg, prefix, ethertype):
+            sgr_uuid = str(uuid.uuid4())
+            if sg:
+                addr = vnc_api.AddressType(
+                    security_group=proj_obj.get_fq_name_str() + ':' + sg)
+            elif prefix:
+                addr = vnc_api.AddressType(
+                    subnet=vnc_api.SubnetType(prefix, 0))
+            local_addr = vnc_api.AddressType(security_group='local')
+            if ingress:
+                src_addr = addr
+                dst_addr = local_addr
+            else:
+                src_addr = local_addr
+                dst_addr = addr
+            rule = vnc_api.PolicyRuleType(
+                rule_uuid=sgr_uuid, direction='>', protocol='any',
+                src_addresses=[src_addr],
+                src_ports=[vnc_api.PortType(0, 65535)],
+                dst_addresses=[dst_addr],
+                dst_ports=[vnc_api.PortType(0, 65535)],
+                ethertype=ethertype)
+            return rule
+    
+        rules = [_get_rule(True, 'default', None, 'IPv4'),
+                 _get_rule(True, 'default', None, 'IPv6'),
+                 _get_rule(False, None, '0.0.0.0', 'IPv4'),
+                 _get_rule(False, None, '::', 'IPv6')]
+        sg_rules = vnc_api.PolicyEntriesType(rules)
+    
+        # create security group
+        sg_obj = self._vnc_api.SecurityGroup(
+            name='default', parent_obj=proj_obj,
+            security_group_entries=sg_rules)
+
+        self._vnc_lib.security_group_create(sg_obj)
+
     def _ensure_default_security_group_exists(self, proj_id):
         proj_id = str(uuid.UUID(proj_id))
         proj_obj = self._vnc_lib.project_read(id=proj_id)
-        vnc_openstack.ensure_default_security_group(self._vnc_lib, proj_obj)
+        sg_groups = proj_obj.get_security_groups()
+        for sg_group in sg_groups or []:
+            if sg_group['to'][-1] == 'default':
+                return
+        self._create_default_security_group(proj_obj)
     # end _ensure_default_security_group_exists
 
 

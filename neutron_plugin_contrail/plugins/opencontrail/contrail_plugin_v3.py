@@ -219,9 +219,36 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
     def add_router_interface(self, context, router_id, interface_info):
         """Add interface to a router."""
 
-        return dict()
+        if not interface_info:
+            msg = _("Either subnet_id or port_id must be specified")
+            raise exc.BadRequest(resource='router', msg=msg)
+
+        if 'port_id' in interface_info:
+            if 'subnet_id' in interface_info:
+                msg = _("Cannot specify both subnet-id and port-id")
+                raise exc.BadRequest(resource='router', msg=msg)
+
+        port_id = interface_info.get('port_id')
+        subnet_id = interface_info.get('subnet_id')
+
+        rtr_iface_handler = rtr_handler.LogicalRouterInterfaceHandler(
+            self._vnc_lib)
+        return  rtr_iface_handler.add_router_interface(
+            self._get_context_dict(context), router_id,
+            port_id=port_id, subnet_id=subnet_id)
 
     def remove_router_interface(self, context, router_id, interface_info):
         """Delete interface from a router."""
 
-        return dict()
+        if not interface_info:
+            msg = _("Either subnet_id or port_id must be specified")
+            raise exc.BadRequest(resource='router', msg=msg)
+
+        port_id = interface_info.get('port_id')
+        subnet_id = interface_info.get('subnet_id')
+
+        rtr_iface_handler = rtr_handler.LogicalRouterInterfaceHandler(
+            self._vnc_lib)
+        return  rtr_iface_handler.remove_router_interface(
+            self._get_context_dict(context), router_id,
+            port_id=port_id, subnet_id=subnet_id)
