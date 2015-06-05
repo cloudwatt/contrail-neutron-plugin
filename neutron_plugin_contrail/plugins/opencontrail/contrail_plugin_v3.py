@@ -1,4 +1,4 @@
-# Copyright 2014 Juniper Networks.  All rights reserved.
+#    Copyright
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -11,8 +11,7 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-#
-# @author: Hampapur Ajay, Praneet Bachheti, Rudra Rugge, Atul Moghe
+
 try:
     from oslo_config import cfg
 except ImportError:

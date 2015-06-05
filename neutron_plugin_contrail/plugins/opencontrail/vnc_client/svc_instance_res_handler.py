@@ -47,7 +47,7 @@ class SvcInstanceGetHandler(res_handler.ResourceGetHandler,
     resource_list_method = "service_instances_list"
     detail = False
 
-    def resource_get(self, context, si_id):
+    def resource_get(self, context, si_id, fields=None):
         try:
             si_obj = self._resource_get(id=si_id)
         except vnc_exc.NoIdError:

@@ -50,7 +50,7 @@ class RouteTableGetHandler(RouteTableBaseGet,
     resource_list_method = "route_tables_list"
     detail = False
 
-    def resource_get(self, context, rt_id):
+    def resource_get(self, context, rt_id, fields=None):
         try:
             rt_obj = self._resource_get(id=rt_id)
         except vnc_exc.NoIdError:

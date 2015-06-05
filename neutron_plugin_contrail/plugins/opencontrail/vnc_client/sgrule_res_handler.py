@@ -112,7 +112,7 @@ class SecurityGroupRuleMixin(object):
 
 class SecurityGroupRuleGetHandler(res_handler.ResourceGetHandler,
                                   SecurityGroupRuleMixin):
-    def resource_get(self, context, sgr_id):
+    def resource_get(self, context, sgr_id, fields=None):
         project_uuid = None
         if not context['is_admin']:
             project_uuid = str(uuid.UUID(context['tenant']))
