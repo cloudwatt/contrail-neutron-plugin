@@ -137,7 +137,7 @@ class SubnetMixin(object):
         for alloc_obj in alloc_objs or []:
             first_ip = alloc_obj.get_start()
             last_ip = alloc_obj.get_end()
-            alloc_dict = {'first_ip': first_ip, 'last_ip': last_ip}
+            alloc_dict = {'start': first_ip, 'end': last_ip}
             allocation_pools.append(alloc_dict)
 
         if not allocation_pools:
@@ -147,7 +147,7 @@ class SubnetMixin(object):
             else:
                 first_ip = str(netaddr.IPNetwork(cidr).network + 1)
             last_ip = str(netaddr.IPNetwork(cidr).broadcast - 1)
-            cidr_pool = {'first_ip': first_ip, 'last_ip': last_ip}
+            cidr_pool = {'start': first_ip, 'end': last_ip}
             allocation_pools.append(cidr_pool)
 
         return allocation_pools
@@ -274,9 +274,7 @@ class SubnetMixin(object):
                 if dhcp_option.get_dhcp_option_name() == '6':
                     dns_servers = dhcp_option.get_dhcp_option_value().split()
                     for dns_server in dns_servers:
-                        nameserver_entry = {'address': dns_server,
-                                            'subnet_id': sn_id}
-                        nameserver_dict_list.append(nameserver_entry)
+                        nameserver_dict_list.append(dns_server)
         sn_q_dict['dns_nameservers'] = nameserver_dict_list
 
         host_route_dict_list = list()
