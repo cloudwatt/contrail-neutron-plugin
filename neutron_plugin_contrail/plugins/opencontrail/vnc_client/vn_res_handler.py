@@ -97,11 +97,12 @@ class VNetworkMixin(object):
         if extra_dict:
             extra_dict['contrail:subnet_ipam'] = []
 
-        sn_handler = subnet_handler.SubnetHandler(self._vnc_lib)
         for ipam_ref in ipam_refs:
             subnets = ipam_ref['attr'].get_ipam_subnets()
             for subnet in subnets:
-                sn_id, sn_cidr = sn_handler.get_subnet_id_cidr(subnet, vn_obj)
+                sn_id = subnet.subnet_uuid
+                sn_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
+                                     subnet_vnc.subnet.get_ip_prefix_len())
                 net_q_dict['subnets'].append(sn_id)
 
                 if not extra_dict:
@@ -112,9 +113,10 @@ class VNetworkMixin(object):
                 sn_ipam['ipam_fq_name'] = ipam_ref['to']
                 extra_dict['contrail:subnet_ipam'].append(sn_ipam)
 
-    def vn_to_neutron_dict(self, vn_obj, contrail_extensions_enabled=False):
+    def vn_to_neutron_dict(self, vn_obj, contrail_extensions_enabled=False,
+                           fields=None):
         net_q_dict = {}
-        extra_dict = None
+        extra_dictc = None
 
         id_perms = vn_obj.get_id_perms()
         net_q_dict['id'] = vn_obj.uuid
@@ -135,84 +137,20 @@ class VNetworkMixin(object):
                                          else False)
         if contrail_extensions_enabled:
             extra_dict = self._get_vn_extra_dict(vn_obj)
-
+        else:
+            extra_dict = None
         self._add_vn_subnet_info(vn_obj, net_q_dict, extra_dict)
 
         if contrail_extensions_enabled:
             net_q_dict.update(extra_dict)
 
+        if fields:
+            net_q_dict = self._filter_res_dict(net_q_dict, fields)
+
         return net_q_dict
 
     def get_vn_tenant_id(self, vn_obj):
         return vn_obj.parent_uuid.replace('-', '')
-
-    def _network_vnc_to_neutron(self, net_obj, net_repr='SHOW',
-                                contrail_extensions_enabled=False):
-        net_q_dict = {}
-        extra_dict = {}
-
-        id_perms = net_obj.get_id_perms()
-        net_q_dict['id'] = net_obj.uuid
-
-        if not net_obj.display_name:
-            # for nets created directly via vnc_api
-            net_q_dict['name'] = net_obj.get_fq_name()[-1]
-        else:
-            net_q_dict['name'] = net_obj.display_name
-
-        extra_dict['contrail:fq_name'] = net_obj.get_fq_name()
-        net_q_dict['tenant_id'] = net_obj.parent_uuid.replace('-', '')
-        net_q_dict['admin_state_up'] = id_perms.enable
-        if net_obj.is_shared:
-            net_q_dict['shared'] = True
-        else:
-            net_q_dict['shared'] = False
-        net_q_dict['status'] = (n_constants.NET_STATUS_ACTIVE
-                                if id_perms.enable
-                                else n_constants.NET_STATUS_DOWN)
-        if net_obj.router_external:
-            net_q_dict['router:external'] = True
-        else:
-            net_q_dict['router:external'] = False
-
-        if net_repr == 'SHOW' or net_repr == 'LIST':
-            extra_dict['contrail:instance_count'] = 0
-
-            net_policy_refs = net_obj.get_network_policy_refs()
-            if net_policy_refs:
-                sorted_refs = sorted(
-                    net_policy_refs,
-                    key=lambda t: (t['attr'].sequence.major,
-                                   t['attr'].sequence.minor))
-                extra_dict['contrail:policys'] = (
-                    [np_ref['to'] for np_ref in sorted_refs])
-
-        rt_refs = net_obj.get_route_table_refs()
-        if rt_refs:
-            extra_dict['contrail:route_table'] = (
-                [rt_ref['to'] for rt_ref in rt_refs])
-
-        ipam_refs = net_obj.get_network_ipam_refs()
-        net_q_dict['subnets'] = []
-        if ipam_refs:
-            extra_dict['contrail:subnet_ipam'] = []
-            sn_handler = subnet_handler.SubnetHandler(self._vnc_lib)
-            for ipam_ref in ipam_refs:
-                subnets = ipam_ref['attr'].get_ipam_subnets()
-                for subnet in subnets:
-                    sn_dict = sn_handler._subnet_vnc_to_neutron(
-                        subnet, net_obj, ipam_ref['to'])
-                    net_q_dict['subnets'].append(sn_dict['id'])
-                    sn_ipam = {}
-                    sn_ipam['subnet_cidr'] = sn_dict['cidr']
-                    sn_ipam['ipam_fq_name'] = ipam_ref['to']
-                    extra_dict['contrail:subnet_ipam'].append(sn_ipam)
-
-        if contrail_extensions_enabled:
-            net_q_dict.update(extra_dict)
-
-        return net_q_dict
-    # end _network_vnc_to_neutron
 
 
 class VNetworkCreateHandler(res_handler.ResourceCreateHandler, VNetworkMixin):
@@ -390,10 +328,10 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
             for net_id in net_ids:
                 try:
                     net_obj = self._resource_get(id=net_id)
-                    net_info = self._network_vnc_to_neutron(
+                    net_info = self.vn_to_neutron_dict(
                         net_obj,
-                        net_repr='LIST',
-                        contrail_extensions_enabled=contrail_exts_enabled)
+                        contrail_extensions_enabled=contrail_exts_enabled,
+                        fields=fields)
                     ret_dict[net_id] = net_info
                 except vnc_exc.NoIdError:
                     pass
@@ -451,15 +389,17 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
             if filters['shared'][0]:
                 nets = self._network_list_shared()
                 for net in nets:
-                    net_info = self._network_vnc_to_neutron(net,
-                                                            net_repr='LIST')
+                    net_info = self.vn_to_neutron_dict(
+                        net, contrail_extensions_enabled=contrail_exts_enabled,
+                        fields=fields)
                     ret_dict[net.uuid] = net_info
         elif filters and 'router:external' in filters:
             nets = self._network_list_router_external()
             if filters['router:external'][0]:
                 for net in nets:
-                    net_info = self._network_vnc_to_neutron(net,
-                                                            net_repr='LIST')
+                    net_info = self.vn_to_neutron_dict(
+                        net, contrail_extensions_enabled=contrail_exts_enabled,
+                        fields=fields)
                     ret_dict[net.uuid] = net_info
         else:
             # read all networks in all projects
@@ -485,8 +425,9 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
                     filters, 'shared', is_shared):
                 continue
             try:
-                net_info = self._network_vnc_to_neutron(net_obj,
-                                                        net_repr='LIST')
+                net_info = self.vn_to_neutron_dict(
+                    net_obj, contrail_extensions_enabled=contrail_exts_enabled,
+                    fields=fields)
             except vnc_exc.NoIdError:
                 continue
             ret_dict[net_obj.uuid] = net_info
@@ -506,7 +447,7 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
                 'NetworkNotFound', net_id=net_uuid, resource='network')
 
         return self.vn_to_neutron_dict(
-            vn_obj, contrail_extensions_enabled)
+            vn_obj, contrail_extensions_enabled, fields=fields)
 
     def resource_count(self, context, filters):
         count = self._resource_count_optimized(filters)

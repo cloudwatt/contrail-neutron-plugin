@@ -121,17 +121,6 @@ class SubnetMixin(object):
             self._subnet_vnc_create_mapping(id, key)
             return self._subnet_vnc_read_mapping(key=key)
 
-    def get_subnet_id_cidr(self, subnet_vnc, vn_obj=None):
-        sn_id = None
-        if vn_obj:
-            subnet_key = self._subnet_vnc_get_key(subnet_vnc, vn_obj.uuid)
-            sn_id = self._subnet_vnc_read_or_create_mapping(
-                id=subnet_vnc.subnet_uuid, key=subnet_key)
-
-        cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
-                          subnet_vnc.subnet.get_ip_prefix_len())
-        return (sn_id, cidr)
-
     def _get_allocation_pools_dict(self, alloc_objs, gateway_ip, cidr):
         allocation_pools = []
         for alloc_obj in alloc_objs or []:
@@ -233,7 +222,8 @@ class SubnetMixin(object):
 
         return subnet_vnc
 
-    def _subnet_vnc_to_neutron(self, subnet_vnc, vn_obj, ipam_fq_name):
+    def _subnet_vnc_to_neutron(self, subnet_vnc, vn_obj, ipam_fq_name,
+                               fields=None):
         sn_q_dict = {}
         sn_name = subnet_vnc.get_subnet_name()
         if sn_name is not None:
@@ -292,6 +282,8 @@ class SubnetMixin(object):
         else:
             sn_q_dict['shared'] = False
 
+        if fields:
+            sn_q_dict = self._filter_res_dict(sn_q_dict, fields)
         return sn_q_dict
 
 
@@ -415,7 +407,7 @@ class SubnetGetHandler(res_handler.ResourceGetHandler, SubnetMixin):
             for subnet_vnc in subnet_vncs:
                 if self._subnet_vnc_get_key(subnet_vnc, net_id) == subnet_key:
                     ret_subnet_q = self._subnet_vnc_to_neutron(
-                        subnet_vnc, vn_obj, ipam_ref['to'])
+                        subnet_vnc, vn_obj, ipam_ref['to'], fields=fields)
                     return ret_subnet_q
 
         return {}
@@ -424,7 +416,8 @@ class SubnetGetHandler(res_handler.ResourceGetHandler, SubnetMixin):
         subnets_info = self.resource_list(context, filters)
         return len(subnets_info)
 
-    def _get_subnet_list_after_apply_filter_(self, vn_list, filters):
+    def _get_subnet_list_after_apply_filter_(self, vn_list, filters,
+                                             fields=None):
         ret_subnets = []
         ret_dict = {}
         for vn_obj in vn_list:
@@ -436,9 +429,8 @@ class SubnetGetHandler(res_handler.ResourceGetHandler, SubnetMixin):
             for ipam_ref in ipam_refs or []:
                 subnet_vncs = ipam_ref['attr'].get_ipam_subnets()
                 for subnet_vnc in subnet_vncs:
-                    sn_info = self._subnet_vnc_to_neutron(subnet_vnc,
-                                                          vn_obj,
-                                                          ipam_ref['to'])
+                    sn_info = self._subnet_vnc_to_neutron(
+                        subnet_vnc, vn_obj, ipam_ref['to'])
                     sn_id = sn_info['id']
                     sn_proj_id = sn_info['tenant_id']
                     sn_net_id = sn_info['network_id']
@@ -465,6 +457,8 @@ class SubnetGetHandler(res_handler.ResourceGetHandler, SubnetMixin):
                                                         sn_name):
                             continue
 
+                    if fields:
+                        sn_info = self._filter_res_dict(sn_info, fields)
                     ret_subnets.append(sn_info)
 
         return ret_subnets
@@ -493,7 +487,8 @@ class SubnetGetHandler(res_handler.ResourceGetHandler, SubnetMixin):
             vn_objs = vn_get_handler.vn_list_shared()
             all_vn_objs.extend(vn_objs)
 
-        return self._get_subnet_list_after_apply_filter_(all_vn_objs, filters)
+        return self._get_subnet_list_after_apply_filter_(all_vn_objs, filters,
+                                                         fields=fields)
 
 
 class SubnetUpdateHandler(res_handler.ResourceUpdateHandler, SubnetMixin):

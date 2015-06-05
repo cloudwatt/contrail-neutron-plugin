@@ -63,6 +63,13 @@ class ContrailResourceHandler(object):
                 pass
         return ids
 
+    @staticmethod
+    def _filter_res_dict(res_dict, fields):
+        new_res_dict = {}
+        for f in fields:
+            new_res_dict[f] = res_dict.get(f)
+        return new_res_dict
+
     def _project_read(self, proj_id=None, fq_name=None):
         return self._vnc_lib.project_read(id=proj_id, fq_name=fq_name)
 
