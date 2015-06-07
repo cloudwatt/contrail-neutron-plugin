@@ -285,7 +285,7 @@ class SecurityGroupCreateHandler(res_handler.ResourceCreateHandler,
         def_rule['ethertype'] = 'IPv4'
         def_rule['security_group_id'] = sg_uuid
         sgrule_handler.SecurityGroupRuleHandler(
-            self._vnc_lib).resource_create(def_rule)
+            self._vnc_lib).resource_create(context, def_rule)
 
         ret_sg_q = self._security_group_vnc_to_neutron(
             sg_obj, contrail_extensions_enabled)

@@ -21,6 +21,7 @@ from neutron.common import constants as n_constants
 from vnc_api import vnc_api
 
 import contrail_res_handler as res_handler
+import fip_res_handler
 import subnet_res_handler as subnet_handler
 import vn_res_handler as vn_handler
 
@@ -721,7 +722,7 @@ class VMInterfaceDeleteHandler(res_handler.ResourceDeleteHandler,
         # disassociate any floating IP used by instance
         fip_back_refs = getattr(vmi_obj, 'floating_ip_back_refs', None)
         if fip_back_refs:
-            fip_handler = res_handler.FloatingIpHandler(self._vnc_lib)
+            fip_handler = fip_res_handler.FloatingIpHandler(self._vnc_lib)
             for fip_back_ref in fip_back_refs:
                 fip_handler.resource_update(id=fip_back_ref['uuid'],
                                             fip_q={'port_id': None})
