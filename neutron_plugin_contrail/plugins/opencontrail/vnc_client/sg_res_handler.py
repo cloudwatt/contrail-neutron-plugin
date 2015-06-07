@@ -24,7 +24,7 @@ import sgrule_res_handler as sgrule_handler
 class SecurityGroupMixin(object):
     def _security_group_vnc_to_neutron(self, sg_obj,
                                        contrail_extensions_enabled=False,
-                                       fields=fields):
+                                       fields=None):
         sg_q_dict = {}
         extra_dict = {}
         extra_dict['contrail:fq_name'] = sg_obj.get_fq_name()

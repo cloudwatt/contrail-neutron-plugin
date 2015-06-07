@@ -50,7 +50,7 @@ class LogicalRouterMixin(object):
 
     def _rtr_obj_to_neutron_dict(self, rtr_obj,
                                  contrail_extensions_enabled=True,
-                                 fields=fields):
+                                 fields=None):
         rtr_q_dict = {}
 
         rtr_q_dict['id'] = rtr_obj.uuid
