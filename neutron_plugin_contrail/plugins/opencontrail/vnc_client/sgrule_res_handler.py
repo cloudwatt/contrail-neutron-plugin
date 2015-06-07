@@ -73,7 +73,10 @@ class SecurityGroupRuleMixin(object):
         sgr_q_dict['id'] = sg_rule.get_rule_uuid()
         sgr_q_dict['tenant_id'] = sg_obj.parent_uuid.replace('-', '')
         sgr_q_dict['security_group_id'] = sg_obj.uuid
-        sgr_q_dict['ethertype'] = sg_rule.get_ethertype()
+        if hasattr(sg_rule, 'get_ethertype'):
+            sgr_q_dict['ethertype'] = sg_rule.get_ethertype()
+        else:
+            sgr_q_dict['ethertype'] = 'IPv4'
         sgr_q_dict['direction'] = direction
         sgr_q_dict['protocol'] = sg_rule.get_protocol()
         sgr_q_dict['port_range_min'] = (
