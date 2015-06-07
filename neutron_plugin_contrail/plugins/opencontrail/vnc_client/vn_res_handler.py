@@ -116,7 +116,7 @@ class VNetworkMixin(object):
     def vn_to_neutron_dict(self, vn_obj, contrail_extensions_enabled=False,
                            fields=None):
         net_q_dict = {}
-        extra_dictc = None
+        extra_dict = None
 
         id_perms = vn_obj.get_id_perms()
         net_q_dict['id'] = vn_obj.uuid
@@ -137,8 +137,6 @@ class VNetworkMixin(object):
                                          else False)
         if contrail_extensions_enabled:
             extra_dict = self._get_vn_extra_dict(vn_obj)
-        else:
-            extra_dict = None
         self._add_vn_subnet_info(vn_obj, net_q_dict, extra_dict)
 
         if contrail_extensions_enabled:
