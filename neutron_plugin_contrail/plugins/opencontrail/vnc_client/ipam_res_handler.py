@@ -97,7 +97,7 @@ class IPamGetHandler(IPamBaseGet, IPamMixin):
                 proj_ipam_id = proj_ipam['uuid']
                 if not self._filters_is_present(filters, 'id', proj_ipam_id):
                     continue
-                ipam_info = self.resource_get(proj_ipam['uuid'])
+                ipam_info = self.resource_get(context, proj_ipam['uuid'])
                 ret_list.append(ipam_info)
 
         return ret_list

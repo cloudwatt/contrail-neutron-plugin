@@ -96,7 +96,7 @@ class SvcInstanceGetHandler(res_handler.ResourceGetHandler,
                 proj_si_id = proj_si['uuid']
                 if not self._filters_is_present(filters, 'id', proj_si_id):
                     continue
-                si_info = self.resource_get(proj_si_id)
+                si_info = self.resource_get(context, proj_si_id)
                 if not self._filters_is_present(filters, 'name',
                                                 si_info['name']):
                     continue

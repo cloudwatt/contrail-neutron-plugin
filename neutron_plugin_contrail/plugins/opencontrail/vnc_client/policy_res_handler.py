@@ -98,7 +98,7 @@ class PolicyGetHandler(PolicyBaseGet, PolicyMixin):
                 proj_policy_id = proj_policy['uuid']
                 if not self._filters_is_present(filters, 'id', proj_policy_id):
                     continue
-                policy_info = self.resource_get(proj_policy['uuid'])
+                policy_info = self.resource_get(context, proj_policy['uuid'])
                 ret_list.append(policy_info)
 
         return ret_list

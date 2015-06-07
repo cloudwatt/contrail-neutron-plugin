@@ -241,7 +241,8 @@ class InstanceIpHandler(ResourceGetHandler, ResourceCreateHandler,
             ip_obj.set_subnet_uuid(subnet_uuid)
         ip_obj.set_virtual_machine_interface(vmi_obj)
         ip_obj.set_virtual_network(vn_obj)
-        ip_obj.set_instance_ip_family(ip_family)
+        if hasattr(ip_obj, 'set_instance_ip_family'):
+            ip_obj.set_instance_ip_family(ip_family)
         if ip_addr:
             ip_obj.set_instance_ip_address(ip_addr)
         ip_id = self._resource_create(ip_obj)

@@ -49,7 +49,8 @@ class LogicalRouterMixin(object):
         return rtr_obj
 
     def _rtr_obj_to_neutron_dict(self, rtr_obj,
-                                 contrail_extensions_enabled=True):
+                                 contrail_extensions_enabled=True,
+                                 fields=fields):
         rtr_q_dict = {}
 
         rtr_q_dict['id'] = rtr_obj.uuid
@@ -72,6 +73,9 @@ class LogicalRouterMixin(object):
 
         if contrail_extensions_enabled:
             rtr_q_dict.update({'contrail:fq_name': rtr_obj.get_fq_name()})
+
+        if fields:
+            rtr_q_dict = self._filter_res_dict(rtr_q_dict, fields)
         return rtr_q_dict
 
     def _router_add_gateway(self, router_q, rtr_obj):
@@ -172,8 +176,9 @@ class LogicalRouterMixin(object):
         vmi_get_handler = vmi_handler.VMInterfaceGetHandler(self._vnc_lib)
         for intf in router_obj.get_virtual_machine_interface_refs() or []:
             port_id = intf['uuid']
-            net_id = vmi_get_handler.resource_get(
-                port_id=port_id)['network_id']
+            vmi_obj = vmi_get_handler._resource_get(id=port_id)
+            net_id = vmi_get_handler.get_vmi_net_id(vmi_obj)
+
             try:
                 vn_obj = self._vnc_lib.virtual_network_read(id=net_id)
             except vnc_exc.NoIdError:
@@ -396,7 +401,7 @@ class LogicalRouterGetHandler(res_handler.ResourceGetHandler,
             self._raise_contrail_exception('RouterNotFound',
                                            router_id=rtr_uuid)
 
-        return self._rtr_obj_to_neutron_dict(rtr_obj)
+        return self._rtr_obj_to_neutron_dict(rtr_obj, fields=fields)
 
     def resource_list(self, context, filters, fields=None):
         extensions_enabled = self._kwargs.get(
@@ -451,10 +456,11 @@ class LogicalRouterGetHandler(res_handler.ResourceGetHandler,
                         continue
                     rtr_info = self._rtr_obj_to_neutron_dict(
                         rtr_obj,
-                        contrail_extensions_enabled=extensions_enabled)
+                        contrail_extensions_enabled=extensions_enabled,
+                        fields=fields)
+                    ret_list.append(rtr_info)
                 except vnc_exc.NoIdError:
                     continue
-                ret_list.append(rtr_info)
 
         return ret_list
 

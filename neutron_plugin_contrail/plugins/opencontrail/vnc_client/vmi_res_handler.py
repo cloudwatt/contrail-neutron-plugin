@@ -211,7 +211,7 @@ class VMInterfaceMixin(object):
         return device_id, device_owner
 
     def _vmi_to_neutron_port(self, vmi_obj, port_req_memo=None,
-                             extensions_enabled=False):
+                             extensions_enabled=False, fields=None):
         port_q_dict = {}
 
         if not getattr(vmi_obj, 'display_name'):
@@ -299,6 +299,8 @@ class VMInterfaceMixin(object):
             extra_dict = {'contrail:fq_name': vmi_obj.get_fq_name()}
             port_q_dict.update(extra_dict)
 
+        if fields:
+            port_q_dict = self._filter_res_dict(port_q_dict, fields)
         return port_q_dict
 
     def _set_vm_instance_for_vmi(self, vmi_obj, instance_name):
@@ -882,6 +884,8 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
                     filters['fixed_ips'], port['fixed_ips']):
                 continue
 
+            if fields:
+                port = self._filter_res_dict(port, fields)
             ret_ports.append(port)
 
         return ret_ports
@@ -896,7 +900,8 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
                                            resource='port')
 
         ret_port_q = self._vmi_to_neutron_port(
-            vmi_obj, extensions_enabled=contrail_extensions_enabled)
+            vmi_obj, extensions_enabled=contrail_extensions_enabled,
+            fields=fields)
 
         return ret_port_q
 

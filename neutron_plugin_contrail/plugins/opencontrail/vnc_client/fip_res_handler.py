@@ -68,7 +68,7 @@ class FloatingIpMixin(object):
 
         return fip_obj
 
-    def _fip_obj_to_neutron_dict(self, fip_obj):
+    def _fip_obj_to_neutron_dict(self, fip_obj, fields=None):
         fip_q_dict = {}
         vmi_get_handler = vmi_handler.VMInterfaceGetHandler(
             self._vnc_lib)
@@ -104,6 +104,8 @@ class FloatingIpMixin(object):
             fip_obj.get_floating_ip_fixed_ip_address())
         fip_q_dict['status'] = n_constants.PORT_STATUS_ACTIVE
 
+        if fields:
+            fip_q_dict = self._filter_res_dict(fip_q_dict, fields)
         return fip_q_dict
 
 
@@ -187,7 +189,7 @@ class FloatingIpGetHandler(res_handler.ResourceGetHandler, FloatingIpMixin):
             self._raise_contrail_exception('FloatingIPNotFound',
                                            floatingip_id=fip_uuid)
 
-        return self._fip_obj_to_neutron_dict(fip_obj)
+        return self._fip_obj_to_neutron_dict(fip_obj, fields=fields)
 
     def resource_list(self, context, filters=None, fields=None):
         # Read in floating ips with either
@@ -220,7 +222,8 @@ class FloatingIpGetHandler(res_handler.ResourceGetHandler, FloatingIpMixin):
                 if (fip_obj.get_floating_ip_address() not in
                         filters['floating_ip_address']):
                     continue
-            ret_list.append(self._fip_obj_to_neutron_dict(fip_obj))
+            ret_list.append(self._fip_obj_to_neutron_dict(fip_obj,
+                                                          fields=fields))
 
         return ret_list
 

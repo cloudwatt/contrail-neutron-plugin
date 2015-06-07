@@ -134,7 +134,7 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
                      api_srvr_ip, api_srvr_port, api_server_url,
                      auth_host=auth_host, auth_port=auth_port,
                      auth_protocol=auth_protocol, auth_url=auth_url,
-                     auth_type=auth_type, wait_for_connect=True)
+                     auth_type=auth_type)
                 connected = True
             except requests.exceptions.RequestException as e:
                 time.sleep(3)

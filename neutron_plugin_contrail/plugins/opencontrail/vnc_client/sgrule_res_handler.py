@@ -23,7 +23,8 @@ import sg_res_handler as sg_handler
 
 
 class SecurityGroupRuleMixin(object):
-    def _security_group_rule_vnc_to_neutron(self, sg_id, sg_rule, sg_obj=None):
+    def _security_group_rule_vnc_to_neutron(self, sg_id, sg_rule,
+                                            sg_obj=None, fields=None):
         sgr_q_dict = {}
         if sg_id is None:
             return sgr_q_dict
@@ -82,6 +83,8 @@ class SecurityGroupRuleMixin(object):
         sgr_q_dict['remote_ip_prefix'] = remote_cidr
         sgr_q_dict['remote_group_id'] = remote_sg_uuid
 
+        if fields:
+            sgr_q_dict = self._filter_res_dict(sgr_q_dict, fields)
         return sgr_q_dict
     # end _security_group_rule_vnc_to_neutron
 
@@ -120,12 +123,13 @@ class SecurityGroupRuleGetHandler(res_handler.ResourceGetHandler,
         sg_obj, sg_rule = self._security_group_rule_find(sgr_id, project_uuid)
         if sg_obj and sg_rule:
             return self._security_group_rule_vnc_to_neutron(sg_obj.uuid,
-                                                            sg_rule, sg_obj)
+                                                            sg_rule, sg_obj,
+                                                            fields=fields)
 
         self._raise_contrail_exception('SecurityGroupRuleNotFound', id=sgr_id,
                                        resource='security_group_rule')
 
-    def security_group_rules_read(self, sg_obj):
+    def security_group_rules_read(self, sg_obj, fields=None):
         sgr_entries = sg_obj.get_security_group_entries()
         sg_rules = []
         if sgr_entries is None:
@@ -134,7 +138,8 @@ class SecurityGroupRuleGetHandler(res_handler.ResourceGetHandler,
         for sg_rule in sgr_entries.get_policy_rule():
             sg_info = self._security_group_rule_vnc_to_neutron(sg_obj.uuid,
                                                                sg_rule,
-                                                               sg_obj)
+                                                               sg_obj,
+                                                               fields=fields)
             sg_rules.append(sg_info)
 
         return sg_rules
@@ -168,7 +173,8 @@ class SecurityGroupRuleGetHandler(res_handler.ResourceGetHandler,
                 # TODO() implement same for name specified in filter
                 if not self._filters_is_present(filters, 'id', sg_obj.uuid):
                     continue
-                sgr_info = self.security_group_rules_read(sg_obj)
+                sgr_info = self.security_group_rules_read(sg_obj,
+                                                          fields=fields)
                 if sgr_info:
                     ret_list.extend(sgr_info)
 

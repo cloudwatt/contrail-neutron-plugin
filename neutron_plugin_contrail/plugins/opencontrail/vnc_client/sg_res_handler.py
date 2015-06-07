@@ -23,7 +23,8 @@ import sgrule_res_handler as sgrule_handler
 
 class SecurityGroupMixin(object):
     def _security_group_vnc_to_neutron(self, sg_obj,
-                                       contrail_extensions_enabled=False):
+                                       contrail_extensions_enabled=False,
+                                       fields=fields):
         sg_q_dict = {}
         extra_dict = {}
         extra_dict['contrail:fq_name'] = sg_obj.get_fq_name()
@@ -49,6 +50,9 @@ class SecurityGroupMixin(object):
 
         if contrail_extensions_enabled:
             sg_q_dict.update(extra_dict)
+
+        if fields:
+            sg_q_dict = self._filter_res_dict(sg_q_dict, fields)        
         return sg_q_dict
     # end _security_group_vnc_to_neutron
 
@@ -128,7 +132,7 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
                 'SecurityGroupNotFound', id=sg_id, resource='security_group')
 
         return self._security_group_vnc_to_neutron(
-            sg_obj, contrail_extensions_enabled)
+            sg_obj, contrail_extensions_enabled, fields=fields)
 
     def resource_list_by_project(self, project_id):
         if project_id:
@@ -179,7 +183,7 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
                         sg_obj.get_display_name() or sg_obj.name):
                     continue
                 sg_info = self._security_group_vnc_to_neutron(
-                    sg_obj, contrail_extensions_enabled)
+                    sg_obj, contrail_extensions_enabled, fields=fields)
                 ret_list.append(sg_info)
 
         return ret_list
