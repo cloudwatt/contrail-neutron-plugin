@@ -724,8 +724,8 @@ class VMInterfaceDeleteHandler(res_handler.ResourceDeleteHandler,
         if fip_back_refs:
             fip_handler = fip_res_handler.FloatingIpHandler(self._vnc_lib)
             for fip_back_ref in fip_back_refs:
-                fip_handler.resource_update(id=fip_back_ref['uuid'],
-                                            fip_q={'port_id': None})
+                fip_handler.resource_update(context, fip_back_ref['uuid'],
+                                            {'port_id': None})
 
         self._resource_delete(id=port_id)
 
