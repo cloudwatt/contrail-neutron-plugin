@@ -101,8 +101,8 @@ class VNetworkMixin(object):
             subnets = ipam_ref['attr'].get_ipam_subnets()
             for subnet in subnets:
                 sn_id = subnet.subnet_uuid
-                sn_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
-                                     subnet_vnc.subnet.get_ip_prefix_len())
+                sn_cidr = '%s/%s' % (subnet.subnet.get_ip_prefix(),
+                                     subnet.subnet.get_ip_prefix_len())
                 net_q_dict['subnets'].append(sn_id)
 
                 if not extra_dict:
