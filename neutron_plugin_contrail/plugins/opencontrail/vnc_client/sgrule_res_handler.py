@@ -288,9 +288,13 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
             endpt = [vnc_api.AddressType(
                 subnet=vnc_api.SubnetType(pfx, pfx_len))]
         elif sgr_q['remote_group_id']:
-            sg_obj = sg_handler.SecurityGroupHandler(
-                self._vnc_lib)._resource_get(
-                id=sgr_q['remote_group_id'])
+            try:
+                sg_obj = sg_handler.SecurityGroupHandler(
+                    self._vnc_lib)._resource_get(id=sgr_q['remote_group_id'])
+            except vnc_exc.NoIdError:
+                raise _raise_contrail_exception('SecurityGroupNotFound',
+                                                id=sgr_q['remote_group_id'],
+                                                resource='security_group_rule')
             endpt = [vnc_api.AddressType(
                 security_group=sg_obj.get_fq_name_str())]
 
