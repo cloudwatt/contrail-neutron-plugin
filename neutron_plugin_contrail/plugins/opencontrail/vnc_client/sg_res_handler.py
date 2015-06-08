@@ -31,7 +31,7 @@ class SecurityGroupMixin(object):
 
         # replace field names
         sg_q_dict['id'] = sg_obj.uuid
-        sg_q_dict['tenant_id'] = sg_obj.parent_uuid.replace('-', '')
+        sg_q_dict['tenant_id'] = sg_obj.parent_uuid
         if not sg_obj.display_name:
             # for security groups created directly via vnc_api
             sg_q_dict['name'] = sg_obj.get_fq_name()[-1]
@@ -66,7 +66,7 @@ class SecurityGroupMixin(object):
         return sg_vnc
     # end _security_group_neutron_to_vnc
 
-    def _create_default_security_group(proj_obj):
+    def _create_default_security_group(self, proj_obj):
         def _get_rule(ingress, sg, prefix, ethertype):
             sgr_uuid = str(uuid.uuid4())
             if sg:
@@ -98,20 +98,31 @@ class SecurityGroupMixin(object):
         sg_rules = vnc_api.PolicyEntriesType(rules)
 
         # create security group
-        sg_obj = self._vnc_api.SecurityGroup(
+        id_perms = vnc_api.IdPermsType(enable=True,
+                                       description='Default security group')
+        sg_obj = vnc_api.SecurityGroup(
             name='default', parent_obj=proj_obj,
+            id_perms=id_perms,
             security_group_entries=sg_rules)
 
         self._vnc_lib.security_group_create(sg_obj)
+        return sg_obj.uuid
 
     def _ensure_default_security_group_exists(self, proj_id):
-        proj_id = str(uuid.UUID(proj_id))
+        if proj_id is None:
+            projects = self._vnc_lib.projects_list()['projects']
+            for project in projects:
+                self._ensure_default_security_group_exists(project['uuid'])
+
+            return
+
+        proj_id = str(proj_id)
         proj_obj = self._vnc_lib.project_read(id=proj_id)
         sg_groups = proj_obj.get_security_groups()
         for sg_group in sg_groups or []:
             if sg_group['to'][-1] == 'default':
-                return
-        self._create_default_security_group(proj_obj)
+                return sg_group['uuid']
+        return self._create_default_security_group(proj_obj)
     # end _ensure_default_security_group_exists
 
 
@@ -137,7 +148,7 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
     def resource_list_by_project(self, project_id):
         if project_id:
             try:
-                project_uuid = str(uuid.UUID(project_id))
+                project_uuid = str(project_id)
                 # Trigger a project read to ensure project sync
                 self._project_read(proj_id=project_uuid)
             except Exception:
@@ -160,7 +171,7 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
         all_sgs = []  # all sgs in all projects
         if context and not context['is_admin']:
             project_sgs = self.resource_list_by_project(
-                str(uuid.UUID(context['tenant'])))
+                str(context['tenant']))
             all_sgs.append(project_sgs)
         else:  # admin context
             if filters and 'tenant_id' in filters:
@@ -173,14 +184,22 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
                 all_sgs.append(self.resource_list_by_project(None))
 
         # prune phase
+        no_rule = res_handler.SGHandler(
+            self._vnc_lib).get_no_rule_security_group(create=False)
         for project_sgs in all_sgs:
             for sg_obj in project_sgs:
+                if no_rule and sg_obj.uuid == no_rule.uuid:
+                    continue
                 if not self._filters_is_present(
                         filters, 'id', sg_obj.uuid):
                     continue
                 if not self._filters_is_present(
                         filters, 'name',
                         sg_obj.get_display_name() or sg_obj.name):
+                    continue
+                if not self._filters_is_present(
+                        filters, 'description',
+                        sg_obj.get_id_perms().get_description()):
                     continue
                 sg_info = self._security_group_vnc_to_neutron(
                     sg_obj, contrail_extensions_enabled, fields=fields)
@@ -197,7 +216,7 @@ class SecurityGroupDeleteHandler(SecurityGroupBaseGet,
         try:
             sg_obj = self._resource_get(id=sg_id)
             if sg_obj.name == 'default' and (
-               str(uuid.UUID(context['tenant'])) == sg_obj.parent_uuid):
+               str(context['tenant']) == sg_obj.parent_uuid):
                 # Deny delete if the security group name is default and
                 # the owner of the SG is deleting it.
                 self._raise_contrail_exception(
@@ -245,7 +264,7 @@ class SecurityGroupCreateHandler(res_handler.ResourceCreateHandler,
     resource_create_method = "security_group_create"
 
     def _create_security_group(self, sg_q):
-        project_id = str(uuid.UUID(sg_q['tenant_id']))
+        project_id = str(sg_q['tenant_id'])
         try:
             project_obj = self._project_read(proj_id=project_id)
         except vnc_exc.NoIdError:
@@ -283,6 +302,18 @@ class SecurityGroupCreateHandler(res_handler.ResourceCreateHandler,
         def_rule['remote_group_id'] = None
         def_rule['protocol'] = 'any'
         def_rule['ethertype'] = 'IPv4'
+        def_rule['security_group_id'] = sg_uuid
+        sgrule_handler.SecurityGroupRuleHandler(
+            self._vnc_lib).resource_create(context, def_rule)
+
+        def_rule = {}
+        def_rule['port_range_min'] = 0
+        def_rule['port_range_max'] = 65535
+        def_rule['direction'] = 'egress'
+        def_rule['remote_ip_prefix'] = None
+        def_rule['remote_group_id'] = None
+        def_rule['protocol'] = 'any'
+        def_rule['ethertype'] = 'IPv6'
         def_rule['security_group_id'] = sg_uuid
         sgrule_handler.SecurityGroupRuleHandler(
             self._vnc_lib).resource_create(context, def_rule)

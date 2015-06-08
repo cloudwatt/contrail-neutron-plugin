@@ -160,7 +160,7 @@ class VNetworkCreateHandler(res_handler.ResourceCreateHandler, VNetworkMixin):
                 'BadRequest', resource='network',
                 msg="'tenant_id' is mandatory")
         net_name = network_q.get('name', None)
-        project_id = str(uuid.UUID(network_q['tenant_id']))
+        project_id = str(network_q['tenant_id'])
         try:
             proj_obj = self._project_read(proj_id=project_id)
         except vnc_exc.NoIdError:
@@ -271,7 +271,7 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
     def _network_list_project(self, project_id, count=False):
         if project_id:
             try:
-                project_uuid = str(uuid.UUID(project_id))
+                project_uuid = str(project_id)
             except Exception:
                 print("Error in converting uuid %s" % (project_id))
         else:
@@ -355,7 +355,7 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
                   'shared' in filters):
                 all_net_objs.extend(self._network_list_shared_and_ext())
             else:
-                project_uuid = str(uuid.UUID(context['tenant']))
+                project_uuid = str(context['tenant'])
                 if not filters:
                     all_net_objs.extend(self._network_list_router_external())
                     all_net_objs.extend(self._network_list_shared())
@@ -458,7 +458,7 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
     def get_vn_list_project(self, project_id, count=False):
         if project_id:
             try:
-                project_uuid = str(uuid.UUID(project_id))
+                project_uuid = str(project_id)
             except ValueError:
                 project_uuid = None
         else:

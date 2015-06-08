@@ -24,7 +24,7 @@ import contrail_res_handler as res_handler
 import fip_res_handler
 import subnet_res_handler as subnet_handler
 import vn_res_handler as vn_handler
-
+from sg_res_handler import SecurityGroupHandler
 
 class VMInterfaceMixin(object):
     @staticmethod
@@ -197,7 +197,7 @@ class VMInterfaceMixin(object):
             device_id = router_refs[0]['uuid']
         elif vmi_obj.parent_type == 'virtual-machine':
             device_id = vmi_obj.parent_name
-        elif vmi_obj.get_virtual_machine_refs() is not None:
+        elif vmi_obj.get_virtual_machine_refs():
             vm_ref = vmi_obj.get_virtual_machine_refs()[0]
             if vm_ref['to'][-1] == vm_ref['uuid']:
                 device_id = vm_ref['to'][-1]
@@ -276,7 +276,14 @@ class VMInterfaceMixin(object):
 
         port_q_dict['security_groups'] = []
         sg_refs = vmi_obj.get_security_group_refs()
+        # read the no rule sg
+        no_rule_sg = res_handler.SGHandler(
+            self._vnc_lib).get_no_rule_security_group(create=False)
         for sg_ref in sg_refs or []:
+            if no_rule_sg and sg_ref['uuid'] == no_rule_sg.uuid:
+                # hide the internal sg
+                continue
+
             port_q_dict['security_groups'].append(sg_ref['uuid'])
 
         port_q_dict['admin_state_up'] = vmi_obj.get_id_perms().enable
@@ -338,7 +345,8 @@ class VMInterfaceMixin(object):
                 except vnc_exc.RefsExistError:
                     pass
 
-    def _set_vmi_security_groups(self, vmi_obj, sec_group_list):
+    def _set_vmi_security_groups(self, vmi_obj, sec_group_list,
+                                 create_no_rule=False):
         vmi_obj.set_security_group_list([])
         for sg_id in sec_group_list or []:
             # TODO() optimize to not read sg (only uuid/fqn needed)
@@ -347,7 +355,7 @@ class VMInterfaceMixin(object):
 
         # When there is no-security-group for a port,the internal
         # no_rule group should be used.
-        if not sec_group_list:
+        if create_no_rule and not sec_group_list:
             sg_obj = res_handler.SGHandler(
                 self._vnc_lib).get_no_rule_security_group()
             vmi_obj.add_security_group(sg_obj)
@@ -419,9 +427,11 @@ class VMInterfaceMixin(object):
                     ip_address=ip_addr, resource='port')
 
     def _neutron_port_to_vmi(self, port_q, vmi_obj=None):
+        update = False
         if not vmi_obj:
             try:
                 vmi_obj = self._resource_get(id=port_q.get('id'))
+                update = True
             except vnc_exc.NoIdError:
                 raise self._raise_contrail_exception(
                     'PortNotFound', port_id=port_q.get('id'),
@@ -441,7 +451,8 @@ class VMInterfaceMixin(object):
 
         if 'security_groups' in port_q:
             self._set_vmi_security_groups(vmi_obj,
-                                          port_q.get('security_groups'))
+                                          port_q.get('security_groups'),
+                                          update)
 
         if 'admin_state_up' in port_q:
             id_perms = vmi_obj.get_id_perms()
@@ -547,7 +558,7 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
                         resource='port')
 
     def _create_vmi_obj(self, port_q, vn_obj):
-        project_id = str(uuid.UUID(port_q['tenant_id']))
+        project_id = str(port_q['tenant_id'])
         try:
             proj_obj = self._project_read(proj_id=project_id)
         except vnc_exc.NoIdError:
@@ -573,6 +584,10 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
         if ('security_groups' not in port_q or
                 port_q['security_groups'].__class__ is object):
             sg_obj = vnc_api.SecurityGroup("default", proj_obj)
+            uid = SecurityGroupHandler(
+                self._vnc_lib)._ensure_default_security_group_exists(
+                proj_obj.uuid)
+            sg_obj.uuid = uid
             vmi_obj.add_security_group(sg_obj)
 
         return vmi_obj
@@ -594,7 +609,7 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
                 'NetworkNotFound', net_id=net_id, resource='port')
 
         tenant_id = self._get_tenant_id_for_create(context, port_q)
-        proj_id = str(uuid.UUID(tenant_id))
+        proj_id = str(tenant_id)
 
         # if mac-address is specified, check against the exisitng ports
         # to see if there exists a port with the same mac-address
@@ -845,7 +860,7 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
         tenant_ids = []
         if not context['is_admin']:
             tenant_ids = [context['tenant']]
-            project_ids = [str(uuid.UUID(context['tenant']))]
+            project_ids = [str(context['tenant'])]
         elif 'tenant_id' in filters:
             tenant_ids = filters['tenant_id']
             project_ids = self._validate_project_ids(context,
@@ -917,9 +932,9 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
 
         if 'tenant_id' in filters:
             if isinstance(filters['tenant_id'], list):
-                project_id = str(uuid.UUID(filters['tenant_id'][0]))
+                project_id = str(filters['tenant_id'][0])
             else:
-                project_id = str(uuid.UUID(filters['tenant_id']))
+                project_id = str(filters['tenant_id'])
 
             nports = len(self._resource_list(parent_id=project_id))
         else:
