@@ -1,24 +1,30 @@
+#!/usr/bin/env python
+# Copyright (c) 2013 Hewlett-Packard Development Company, L.P.
 #
-# Copyright (c) 2013 Juniper Networks, Inc. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from setuptools import setup, find_packages
+# THIS FILE IS MANAGED BY THE GLOBAL REQUIREMENTS REPO - DO NOT EDIT
+import setuptools
 
-def requirements(filename):
-    with open(filename) as f:
-        lines = f.read().splitlines()
-    return lines
+# In python < 2.7.4, a lazy loading of package `pbr` will break
+# setuptools if some other modules registered functions in `atexit`.
+# solution from: http://bugs.python.org/issue15881#msg170215
+try:
+    import multiprocessing  # noqa
+except ImportError:
+    pass
 
-setup(
-    name='neutron_plugin_contrail',
-    version='0.1dev',
-    packages=find_packages(),
-    package_data={'': ['*.html', '*.css', '*.xml']},
-    zip_safe=False,
-    long_description="Contrail neutron plugin",
-
-    install_requires=requirements('requirements.txt'),
-
-    test_suite='neutron_plugin_contrail.tests',
-    tests_require=requirements('test-requirements.txt'),
-)
+setuptools.setup(
+    setup_requires=['pbr'],
+    pbr=True)

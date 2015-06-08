@@ -21,6 +21,11 @@ from vnc_api import vnc_api
 import contrail_res_handler as res_handler
 import vn_res_handler as vn_handler
 
+import logging
+
+LOG = logging.getLogger(__name__)
+
+
 _IFACE_ROUTE_TABLE_NAME_PREFIX = 'NEUTRON_IFACE_RT'
 
 
@@ -157,9 +162,13 @@ class SubnetMixin(object):
 
         return ret_subnets
 
-    @staticmethod
-    def _subnet_neutron_to_vnc(subnet_q):
-        cidr = netaddr.IPNetwork(subnet_q['cidr'])
+    def _subnet_neutron_to_vnc(self, subnet_q):
+        if not subnet_q.get('cidr'):
+            self._raise_contrail_exception(
+                'BadRequest', msg='cidr is empty',
+                resource='subnet')
+ 
+        cidr = netaddr.IPNetwork(subnet_q.get('cidr'))
         pfx = str(cidr.network)
         pfx_len = int(cidr.prefixlen)
         if cidr.version != 4 and cidr.version != 6:
@@ -272,10 +281,9 @@ class SubnetMixin(object):
         if host_routes:
             for host_route in host_routes.route or []:
                 host_route_entry = {'destination': host_route.get_prefix(),
-                                    'nexthop': host_route.get_next_hop(),
-                                    'subnet_id': sn_id}
+                                    'nexthop': host_route.get_next_hop()}
                 host_route_dict_list.append(host_route_entry)
-        sn_q_dict['routes'] = host_route_dict_list
+        sn_q_dict['host_routes'] = host_route_dict_list
 
         if vn_obj.is_shared:
             sn_q_dict['shared'] = True
