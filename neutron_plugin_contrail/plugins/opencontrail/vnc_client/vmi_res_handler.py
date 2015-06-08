@@ -250,9 +250,9 @@ class VMInterfaceMixin(object):
             port_req_memo['subnets'][net_id] = subnets_info
 
         if vmi_obj.parent_type != "project":
-            proj_id = vn_obj.parent_uuid.replace('-', '')
+            proj_id = self._frame_project_id(vn_obj.parent_uuid)
         else:
-            proj_id = vmi_obj.parent_uuid.replace('-', '')
+            proj_id = self._frame_project_id(vmi_obj.parent_uuid)
 
         port_q_dict['tenant_id'] = proj_id
         port_q_dict['network_id'] = net_id
@@ -526,7 +526,7 @@ class VMInterfaceMixin(object):
             vn_obj = vn_get_handler._resource_get(id=net_id)
             return vn_get_handler.get_vn_tenant_id(vn_obj)
 
-        return vmi_obj.parent_uuid.replace('-', '')
+        return self._frame_project_id(vmi_obj.parent_uuid)
 
 
 class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,

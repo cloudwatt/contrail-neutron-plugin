@@ -27,7 +27,8 @@ class IPamMixin(object):
         # replace field names
         ipam_q_dict['id'] = ipam_q_dict.pop('uuid')
         ipam_q_dict['name'] = ipam_obj.name
-        ipam_q_dict['tenant_id'] = ipam_obj.parent_uuid.replace('-', '')
+        ipam_q_dict['tenant_id'] = self._frame_project_id(
+            ipam_obj.parent_uuid)
         ipam_q_dict['mgmt'] = ipam_q_dict.pop('network_ipam_mgmt', None)
         net_back_refs = ipam_obj.get_virtual_network_back_refs()
         if net_back_refs:

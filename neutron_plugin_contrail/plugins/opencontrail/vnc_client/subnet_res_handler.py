@@ -239,7 +239,7 @@ class SubnetMixin(object):
             sn_q_dict['name'] = sn_name
         else:
             sn_q_dict['name'] = ''
-        sn_q_dict['tenant_id'] = vn_obj.parent_uuid.replace('-', '')
+        sn_q_dict['tenant_id'] = self._frame_project_id(vn_obj.parent_uuid)
         sn_q_dict['network_id'] = vn_obj.uuid
         sn_q_dict['ipv6_ra_mode'] = None
         sn_q_dict['ipv6_address_mode'] = None

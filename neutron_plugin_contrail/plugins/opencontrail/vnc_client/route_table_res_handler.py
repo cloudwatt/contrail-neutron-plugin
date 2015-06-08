@@ -26,7 +26,7 @@ class RouteTableMixin(object):
 
         # replace field names
         rt_q_dict['id'] = rt_obj.uuid
-        rt_q_dict['tenant_id'] = rt_obj.parent_uuid.replace('-', '')
+        rt_q_dict['tenant_id'] = self._frame_project_id(rt_obj.parent_uuid)
         rt_q_dict['name'] = rt_obj.name
         rt_q_dict['fq_name'] = rt_obj.fq_name
 

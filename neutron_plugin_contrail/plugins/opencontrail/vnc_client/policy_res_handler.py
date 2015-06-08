@@ -27,7 +27,8 @@ class PolicyMixin(object):
         # replace field names
         policy_q_dict['id'] = policy_q_dict.pop('uuid')
         policy_q_dict['name'] = policy_obj.name
-        policy_q_dict['tenant_id'] = policy_obj.parent_uuid.replace('-', '')
+        policy_q_dict['tenant_id'] = self._frame_project_id(
+            policy_obj.parent_uuid)
         policy_q_dict['entries'] = policy_q_dict.pop('network_policy_entries',
                                                      None)
         net_back_refs = policy_obj.get_virtual_network_back_refs()

@@ -27,7 +27,8 @@ class SvcInstanceMixin(object):
 
         # replace field names
         si_q_dict['id'] = si_obj.uuid
-        si_q_dict['tenant_id'] = si_obj.parent_uuid.replace('-', '')
+        si_q_dict['tenant_id'] = self._frame_project_id(
+            si_obj.parent_uuid)
         si_q_dict['name'] = si_obj.name
         si_props = si_obj.get_service_instance_properties()
         if si_props:

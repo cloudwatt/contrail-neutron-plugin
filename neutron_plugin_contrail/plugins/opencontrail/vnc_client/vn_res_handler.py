@@ -127,7 +127,8 @@ class VNetworkMixin(object):
         else:
             net_q_dict['name'] = vn_obj.display_name
 
-        net_q_dict['tenant_id'] = vn_obj.parent_uuid.replace('-', '')
+        net_q_dict['tenant_id'] = self._frame_project_id(
+            vn_obj.parent_uuid)
         net_q_dict['admin_state_up'] = id_perms.enable
         net_q_dict['shared'] = True if vn_obj.is_shared else False
         net_q_dict['status'] = (n_constants.NET_STATUS_ACTIVE
@@ -148,7 +149,7 @@ class VNetworkMixin(object):
         return net_q_dict
 
     def get_vn_tenant_id(self, vn_obj):
-        return vn_obj.parent_uuid.replace('-', '')
+        return self._frame_project_id(vn_obj.parent_uuid)
 
 
 class VNetworkCreateHandler(res_handler.ResourceCreateHandler, VNetworkMixin):

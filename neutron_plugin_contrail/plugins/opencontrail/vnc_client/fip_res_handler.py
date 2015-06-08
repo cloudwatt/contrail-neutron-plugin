@@ -75,7 +75,8 @@ class FloatingIpMixin(object):
 
         floating_net_id = self._vnc_lib.fq_name_to_id(
             'virtual-network', fip_obj.get_fq_name()[:-2])
-        tenant_id = fip_obj.get_project_refs()[0]['uuid'].replace('-', '')
+        tenant_id = self._frame_project_id(
+            fip_obj.get_project_refs()[0]['uuid'])
 
         port_id = None
         router_id = None

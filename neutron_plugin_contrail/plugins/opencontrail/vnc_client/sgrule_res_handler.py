@@ -71,7 +71,7 @@ class SecurityGroupRuleMixin(object):
                     pass
 
         sgr_q_dict['id'] = sg_rule.get_rule_uuid()
-        sgr_q_dict['tenant_id'] = sg_obj.parent_uuid.replace('-', '')
+        sgr_q_dict['tenant_id'] = self._frame_project_id(sg_obj.parent_uuid)
         sgr_q_dict['security_group_id'] = sg_obj.uuid
         if hasattr(sg_rule, 'get_ethertype'):
             sgr_q_dict['ethertype'] = sg_rule.get_ethertype()
