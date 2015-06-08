@@ -63,6 +63,9 @@ class ContrailResourceHandler(object):
                 pass
         return ids
 
+    def _frame_project_id(self, proj_id):
+        return proj_id.replace("-", "")
+
     @staticmethod
     def _filter_res_dict(res_dict, fields):
         new_res_dict = {}

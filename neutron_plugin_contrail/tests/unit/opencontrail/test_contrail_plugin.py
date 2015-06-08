@@ -48,6 +48,7 @@ from neutron.tests.unit import test_l3_plugin
 
 from vnc_api import vnc_api
 from neutron_plugin_contrail.tests.unit.opencontrail.vnc_mock import MockVnc
+from neutron_plugin_contrail.plugins.opencontrail.vnc_client import contrail_res_handler
 
 
 CONTRAIL_PKG_PATH = "neutron_plugin_contrail.plugins.opencontrail.contrail_plugin_v3"
@@ -222,7 +223,7 @@ class JVContrailPluginTestCase(test_plugin.NeutronDbPluginV2TestCase):
         cfg.CONF.keystone_authtoken = KeyStoneInfo()
         from neutron_plugin_contrail import extensions
         cfg.CONF.api_extensions_path = "extensions:" + extensions.__path__[0]
-
+        contrail_res_handler.ContrailResourceHandler._frame_project_id = lambda x, y: y
         vnc_api.VncApi = MockVnc
         self.domain_obj = vnc_api.Domain()
         MockVnc().domain_create(self.domain_obj)

@@ -31,7 +31,7 @@ class SecurityGroupMixin(object):
 
         # replace field names
         sg_q_dict['id'] = sg_obj.uuid
-        sg_q_dict['tenant_id'] = sg_obj.parent_uuid
+        sg_q_dict['tenant_id'] = self._frame_project_id(sg_obj.parent_uuid)
         if not sg_obj.display_name:
             # for security groups created directly via vnc_api
             sg_q_dict['name'] = sg_obj.get_fq_name()[-1]
