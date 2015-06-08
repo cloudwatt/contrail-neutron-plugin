@@ -58,10 +58,13 @@ class ContrailResourceHandler(object):
         ids = []
         for project_id in project_ids:
             try:
-                ids.append(str(uuid.UUID(project_id)))
+                ids.append(str(project_id))
             except ValueError:
                 pass
         return ids
+
+    def _frame_project_id(self, proj_id):
+        return proj_id.replace("-", "")
 
     @staticmethod
     def _filter_res_dict(res_dict, fields):
@@ -153,7 +156,7 @@ class ResourceGetHandler(ContrailResourceHandler):
                 parent_id=pid, count=True, back_refs=False,
                 detail=False)[json_resource]['count']
 
-        ret = [count(str(uuid.UUID(pid)) if pid else None)
+        ret = [count(str(pid) if pid else None)
                for pid in project_ids] if project_ids else [count(None)]
         return sum(ret)
 
@@ -208,12 +211,15 @@ class SGHandler(ResourceGetHandler, ResourceCreateHandler,
         return sg_obj
     # end _create_no_rule_sg
 
-    def get_no_rule_security_group(self):
+    def get_no_rule_security_group(self, create=True):
         try:
             sg_obj = self._resource_get(
                 fq_name=vnc_api_common.SG_NO_RULE_FQ_NAME)
         except vnc_api.NoIdError:
-            sg_obj = self._create_no_rule_sg()
+            if create:
+                sg_obj = self._create_no_rule_sg()
+            else:
+                sg_obj = None
 
         return sg_obj
 

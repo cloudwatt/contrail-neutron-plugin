@@ -78,11 +78,14 @@ class SecurityGroupRuleMixin(object):
         else:
             sgr_q_dict['ethertype'] = 'IPv4'
         sgr_q_dict['direction'] = direction
-        sgr_q_dict['protocol'] = sg_rule.get_protocol()
-        sgr_q_dict['port_range_min'] = (
-            sg_rule.get_dst_ports()[0].get_start_port())
-        sgr_q_dict['port_range_max'] = (
-            sg_rule.get_dst_ports()[0].get_end_port())
+        proto = sg_rule.get_protocol()
+        sgr_q_dict['protocol'] = None if proto == 'any' else proto
+        port_min = sg_rule.get_dst_ports()[0].get_start_port()
+        sgr_q_dict['port_range_min'] = None if port_min == 0 else port_min
+        port_max = (sg_rule.get_dst_ports()[0].get_end_port())
+        sgr_q_dict['port_range_max'] = None if port_max == 65535 else port_max
+        if remote_cidr == '0.0.0.0/0' or remote_cidr == '::/0':
+            remote_cidr = None
         sgr_q_dict['remote_ip_prefix'] = remote_cidr
         sgr_q_dict['remote_group_id'] = remote_sg_uuid
 
@@ -225,8 +228,9 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
         try:
             val = int(value)
             # TODO(ethuleau): support all protocol numbers
-            if val >= 0 and val <= 255 and val in IP_PROTOCOL_MAP:
-                return IP_PROTOCOL_MAP[val]
+            if val >= 0 and val <= 255:
+                return IP_PROTOCOL_MAP[val] if val in IP_PROTOCOL_MAP \
+                    else str(val)
             self._raise_contrail_exception(
                 'SecurityGroupRuleInvalidProtocol',
                 protocol=value, values=IP_PROTOCOL_MAP.values(),
@@ -295,6 +299,11 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
                 self._raise_contrail_exception('SecurityGroupNotFound',
                                                 id=sgr_q['remote_group_id'],
                                                 resource='security_group_rule')
+
+            if sgr_q.get('tenant_id') and (
+                sg_obj.parent_uuid != sgr_q['tenant_id']):
+                self._raise_contrail_exception("NotFound")
+
             endpt = [vnc_api.AddressType(
                 security_group=sg_obj.get_fq_name_str())]
 
@@ -314,7 +323,7 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
             if not sgr_q['ethertype']:
                 sgr_q['ethertype'] = 'IPv4'
 
-        sgr_uuid = str(uuid.uuid4())
+        sgr_uuid = str(uuid.uuid4()) if 'id' not in sgr_q else sgr_q['id']
 
         rule = vnc_api.PolicyRuleType(
             rule_uuid=sgr_uuid, direction=dir,
@@ -327,14 +336,16 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
         return rule
     # end _security_group_rule_neutron_to_vnc
 
-    def _security_group_rule_create(self, sg_id, sg_rule):
+    def _security_group_rule_create(self, sg_id, sg_rule, project_id):
         sghandler = sg_handler.SecurityGroupHandler(self._vnc_lib)
         try:
             sg_vnc = sghandler._resource_get(id=sg_id)
         except vnc_exc.NoIdError:
             self._raise_contrail_exception('SecurityGroupNotFound', id=sg_id,
-                                           resource='security_group_rule')
+                                           resource='security_group')
 
+        if project_id and sg_vnc.parent_uuid != project_id:
+            self._raise_contrail_exception('NotFound')
         rules = sg_vnc.get_security_group_entries()
         if rules is None:
             rules = vnc_api.PolicyEntriesType([sg_rule])
@@ -356,7 +367,7 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
         self._validate_port_range(sgr_q)
         sg_id = sgr_q['security_group_id']
         sg_rule = self._security_group_rule_neutron_to_vnc(sgr_q)
-        self._security_group_rule_create(sg_id, sg_rule)
+        self._security_group_rule_create(sg_id, sg_rule, sgr_q.get('tenant_id', None))
         ret_sg_rule_q = self._security_group_rule_vnc_to_neutron(sg_id,
                                                                  sg_rule)
 
