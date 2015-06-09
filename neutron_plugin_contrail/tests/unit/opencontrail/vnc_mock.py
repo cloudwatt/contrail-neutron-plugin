@@ -312,6 +312,7 @@ class MockVnc(object):
                                           obj.uuid)
 
     def __getattr__(self, method):
+        print " -- vnc_method %s" % method
         (resource, action) = self._break_method(method)
         if action not in ['list', 'read', 'create',
                           'update', 'delete']:

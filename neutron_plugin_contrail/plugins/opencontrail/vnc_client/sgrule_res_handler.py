@@ -71,7 +71,7 @@ class SecurityGroupRuleMixin(object):
                     pass
 
         sgr_q_dict['id'] = sg_rule.get_rule_uuid()
-        sgr_q_dict['tenant_id'] = self._frame_project_id(sg_obj.parent_uuid)
+        sgr_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(sg_obj.parent_uuid)
         sgr_q_dict['security_group_id'] = sg_obj.uuid
         if hasattr(sg_rule, 'get_ethertype'):
             sgr_q_dict['ethertype'] = sg_rule.get_ethertype()
@@ -124,7 +124,7 @@ class SecurityGroupRuleGetHandler(res_handler.ResourceGetHandler,
     def resource_get(self, context, sgr_id, fields=None):
         project_uuid = None
         if not context['is_admin']:
-            project_uuid = str(uuid.UUID(context['tenant']))
+            project_uuid = self._project_id_neutron_to_vnc(context['tenant'])
 
         sg_obj, sg_rule = self._security_group_rule_find(sgr_id, project_uuid)
         if sg_obj and sg_rule:
@@ -167,7 +167,7 @@ class SecurityGroupRuleGetHandler(res_handler.ResourceGetHandler,
         else:  # no filters
             p_id = None
             if context and not context['is_admin']:
-                p_id = str(uuid.UUID(context['tenant']))
+                p_id = self._project_id_neutron_to_vnc(context['tenant'])
             project_sgs = sg_handler.SecurityGroupHandler(
                 self._vnc_lib).resource_list_by_project(p_id)
 
@@ -201,7 +201,7 @@ class SecurityGroupRuleDeleteHandler(res_handler.ResourceDeleteHandler,
     def resource_delete(self, context, sgr_id):
         project_uuid = None
         if not context['is_admin']:
-            project_uuid = str(uuid.UUID(context['tenant']))
+            project_uuid = self._project_id_neutron_to_vnc(context['tenant'])
 
         sg_obj, sg_rule = self._security_group_rule_find(sgr_id, project_uuid)
         if sg_obj and sg_rule:

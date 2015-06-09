@@ -27,7 +27,7 @@ class IPamMixin(object):
         # replace field names
         ipam_q_dict['id'] = ipam_q_dict.pop('uuid')
         ipam_q_dict['name'] = ipam_obj.name
-        ipam_q_dict['tenant_id'] = self._frame_project_id(
+        ipam_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
             ipam_obj.parent_uuid)
         ipam_q_dict['mgmt'] = ipam_q_dict.pop('network_ipam_mgmt', None)
         net_back_refs = ipam_obj.get_virtual_network_back_refs()
@@ -68,7 +68,7 @@ class IPamGetHandler(IPamBaseGet, IPamMixin):
         return self._ipam_vnc_to_neutron(ipam_obj)
 
     def resource_list_by_project(self, project_id):
-        project_uuid = str(uuid.UUID(project_id))
+        project_uuid = self._project_id_neutron_to_vnc(project_id)
 
         resp_dict = self._resource_list(parent_id=project_uuid)
         return resp_dict['network-ipams']
@@ -140,7 +140,7 @@ class IPamCreateHandler(res_handler.ResourceCreateHandler):
 
     def resource_create(self, context, ipam_q):
         ipam_name = ipam_q.get('name', None)
-        project_id = str(uuid.UUID(ipam_q['tenant_id']))
+        project_id = self._project_id_neutron_to_vnc(ipam_q['tenant_id'])
         try:
             project_obj = self._project_read(proj_id=project_id)
         except vnc_exc.NoIdError:
