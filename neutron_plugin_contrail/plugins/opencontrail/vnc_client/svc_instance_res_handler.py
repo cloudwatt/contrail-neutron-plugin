@@ -27,7 +27,8 @@ class SvcInstanceMixin(object):
 
         # replace field names
         si_q_dict['id'] = si_obj.uuid
-        si_q_dict['tenant_id'] = si_obj.parent_uuid.replace('-', '')
+        si_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
+            si_obj.parent_uuid)
         si_q_dict['name'] = si_obj.name
         si_props = si_obj.get_service_instance_properties()
         if si_props:
@@ -59,7 +60,7 @@ class SvcInstanceGetHandler(res_handler.ResourceGetHandler,
 
     def resource_list_by_project(self, project_id):
         try:
-            project_uuid = str(uuid.UUID(project_id))
+            project_uuid = self._project_id_neutron_to_vnc(project_id)
         except Exception:
             print "Error in converting uuid %s" % (project_id)
 
@@ -79,7 +80,7 @@ class SvcInstanceGetHandler(res_handler.ResourceGetHandler,
                 project_sis = self.resource_list_by_project(p_id)
                 all_sis.append(project_sis)
         elif filters and 'name' in filters:
-            p_id = str(uuid.UUID(context['tenant']))
+            p_id = self._project_id_neutron_to_vnc(context['tenant'])
             project_sis = self.resource_list_by_project(p_id)
             all_sis.append(project_sis)
         else:  # no filters
@@ -117,7 +118,7 @@ class SvcInstanceCreateHandler(res_handler.ResourceCreateHandler,
     resource_create_method = "service_instance_create"
 
     def _svc_instance_neutron_to_vnc(self, si_q):
-        project_id = str(uuid.UUID(si_q['tenant_id']))
+        project_id = self._project_id_neutron_to_vnc(si_q['tenant_id'])
         try:
             project_obj = self._project_read(proj_id=project_id)
         except vnc_exc.NoIdError:

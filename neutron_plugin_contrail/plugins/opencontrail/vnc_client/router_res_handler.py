@@ -58,7 +58,7 @@ class LogicalRouterMixin(object):
             rtr_q_dict['name'] = rtr_obj.get_fq_name()[-1]
         else:
             rtr_q_dict['name'] = rtr_obj.display_name
-        rtr_q_dict['tenant_id'] = rtr_obj.parent_uuid.replace('-', '')
+        rtr_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(rtr_obj.parent_uuid)
         rtr_q_dict['admin_state_up'] = rtr_obj.get_id_perms().enable
         rtr_q_dict['shared'] = False
         rtr_q_dict['status'] = n_constants.NET_STATUS_ACTIVE
@@ -278,7 +278,7 @@ class LogicalRouterCreateHandler(res_handler.ResourceCreateHandler,
     resource_create_method = 'logical_router_create'
 
     def _create_router(self, router_q):
-        project_id = str(uuid.UUID(router_q['tenant_id']))
+        project_id = self._project_id_neutron_to_vnc(router_q['tenant_id'])
         project_obj = self._project_read(proj_id=project_id)
         id_perms = vnc_api.IdPermsType(enable=True)
         return vnc_api.LogicalRouter(router_q.get('name'), project_obj,
@@ -343,7 +343,7 @@ class LogicalRouterGetHandler(res_handler.ResourceGetHandler,
     def _router_list_project(self, project_id=None, detail=False):
         if project_id:
             try:
-                project_uuid = str(uuid.UUID(project_id))
+                project_uuid = self._project_id_neutron_to_vnc(project_id)
             except Exception:
                 return []
         else:
@@ -566,7 +566,7 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
             vn_obj = self._subnet_handler.get_vn_obj_for_subnet_id(subnet_id)
             fixed_ip = {'ip_address': subnet_vnc.default_gateway,
                         'subnet_id': subnet_id}
-            port_q = {'tenant_id': vn_obj.parent_uuid.replace('-', ''),
+            port_q = {'tenant_id': self._project_id_vnc_to_neutron(vn_obj.parent_uuid),
                       'network_id': vn_obj.uuid,
                       'fixed_ips': [fixed_ip],
                       'admin_state_up': True,
@@ -642,7 +642,7 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
         router_obj.add_virtual_machine_interface(vmi_obj)
         self._resource_update(router_obj)
         info = {'id': router_id,
-                'tenant_id': vn_obj.parent_uuid.replace('-', ''),
+                'tenant_id': self._project_id_vnc_to_neutron(vn_obj.parent_uuid),
                 'port_id': vmi_obj.uuid,
                 'subnet_id': subnet_id}
         return info
@@ -678,7 +678,7 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
                 self._raise_contrail_exception('BadRequest',
                                                resource='router', msg=msg)
         network_id = vn_obj.uuid
-        tenant_id = vn_obj.parent_uuid.replace('-', '')
+        tenant_id = self._project_id_vnc_to_neutron(vn_obj.parent_uuid)
         self._update_snat_routing_table(router_obj, network_id, set_snat=False)
         if not vmi_obj:
             vmi_obj = self._vnc_lib.virtual_machine_interface_read(id=port_id)

@@ -26,7 +26,7 @@ class RouteTableMixin(object):
 
         # replace field names
         rt_q_dict['id'] = rt_obj.uuid
-        rt_q_dict['tenant_id'] = rt_obj.parent_uuid.replace('-', '')
+        rt_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(rt_obj.parent_uuid)
         rt_q_dict['name'] = rt_obj.name
         rt_q_dict['fq_name'] = rt_obj.fq_name
 
@@ -62,7 +62,7 @@ class RouteTableGetHandler(RouteTableBaseGet,
 
     def resource_list_by_project(self, project_id):
         try:
-            project_uuid = str(uuid.UUID(project_id))
+            project_uuid = self._project_id_neutron_to_vnc(project_id)
         except Exception:
             print("Error in converting uuid %s" % (project_id))
 
@@ -83,7 +83,7 @@ class RouteTableGetHandler(RouteTableBaseGet,
                 project_rts = self.resource_list_by_project(p_id)
                 all_rts.append(project_rts)
         elif filters and 'name' in filters:
-            p_id = str(uuid.UUID(context['tenant']))
+            p_id = self._project_id_neutron_to_vnc(context['tenant'])
             project_rts = self.resource_list_by_project(p_id)
             all_rts.append(project_rts)
         else:  # no filters
@@ -113,7 +113,7 @@ class RouteTableCreateHandler(res_handler.ResourceCreateHandler):
     resource_create_method = "route_table_create"
 
     def resource_create(self, context, rt_q):
-        project_id = str(uuid.UUID(rt_q['tenant_id']))
+        project_id = self._project_id_neutron_to_vnc(rt_q['tenant_id'])
         project_obj = self._project_read(proj_id=project_id)
         rt_obj = vnc_api.RouteTable(name=rt_q['name'],
                                     parent_obj=project_obj)

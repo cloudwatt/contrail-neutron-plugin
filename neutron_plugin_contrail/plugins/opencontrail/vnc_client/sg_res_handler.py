@@ -31,7 +31,7 @@ class SecurityGroupMixin(object):
 
         # replace field names
         sg_q_dict['id'] = sg_obj.uuid
-        sg_q_dict['tenant_id'] = self._frame_project_id(sg_obj.parent_uuid)
+        sg_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(sg_obj.parent_uuid)
         if not sg_obj.display_name:
             # for security groups created directly via vnc_api
             sg_q_dict['name'] = sg_obj.get_fq_name()[-1]
@@ -116,7 +116,7 @@ class SecurityGroupMixin(object):
 
             return
 
-        proj_id = str(proj_id)
+        proj_id = self._project_id_neutron_to_vnc(proj_id)
         proj_obj = self._vnc_lib.project_read(id=proj_id)
         sg_groups = proj_obj.get_security_groups()
         for sg_group in sg_groups or []:
@@ -148,7 +148,7 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
     def resource_list_by_project(self, project_id):
         if project_id:
             try:
-                project_uuid = str(project_id)
+                project_uuid = self._project_id_neutron_to_vnc(project_id)
                 # Trigger a project read to ensure project sync
                 self._project_read(proj_id=project_uuid)
             except Exception:
@@ -171,7 +171,7 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
         all_sgs = []  # all sgs in all projects
         if context and not context['is_admin']:
             project_sgs = self.resource_list_by_project(
-                str(context['tenant']))
+                self._project_id_neutron_to_vnc(context['tenant']))
             all_sgs.append(project_sgs)
         else:  # admin context
             if filters and 'tenant_id' in filters:
@@ -216,7 +216,8 @@ class SecurityGroupDeleteHandler(SecurityGroupBaseGet,
         try:
             sg_obj = self._resource_get(id=sg_id)
             if sg_obj.name == 'default' and (
-               str(context['tenant']) == sg_obj.parent_uuid):
+               self._project_id_neutron_to_vnc(context['tenant']) ==
+               sg_obj.parent_uuid):
                 # Deny delete if the security group name is default and
                 # the owner of the SG is deleting it.
                 self._raise_contrail_exception(
@@ -264,7 +265,7 @@ class SecurityGroupCreateHandler(res_handler.ResourceCreateHandler,
     resource_create_method = "security_group_create"
 
     def _create_security_group(self, sg_q):
-        project_id = str(sg_q['tenant_id'])
+        project_id = self._project_id_neutron_to_vnc(sg_q['tenant_id'])
         try:
             project_obj = self._project_read(proj_id=project_id)
         except vnc_exc.NoIdError:

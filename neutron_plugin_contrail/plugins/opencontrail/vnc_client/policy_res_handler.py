@@ -27,7 +27,8 @@ class PolicyMixin(object):
         # replace field names
         policy_q_dict['id'] = policy_q_dict.pop('uuid')
         policy_q_dict['name'] = policy_obj.name
-        policy_q_dict['tenant_id'] = policy_obj.parent_uuid.replace('-', '')
+        policy_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
+            policy_obj.parent_uuid)
         policy_q_dict['entries'] = policy_q_dict.pop('network_policy_entries',
                                                      None)
         net_back_refs = policy_obj.get_virtual_network_back_refs()
@@ -67,7 +68,7 @@ class PolicyGetHandler(PolicyBaseGet, PolicyMixin):
         return self._policy_vnc_to_neutron(policy_obj)
 
     def resource_list_by_project(self, project_id):
-        project_uuid = str(uuid.UUID(project_id))
+        project_uuid = self._project_id_neutron_to_vnc(project_id)
         resp_dict = self._resource_list(parent_id=project_uuid)
 
         return resp_dict['network-policys']
@@ -120,7 +121,7 @@ class PolicyCreateHandler(res_handler.ResourceCreateHandler, PolicyMixin):
             raise self._raise_contrail_exception(
                 'BadRequest', resource='policy',
                 msg="'tenant_id' is mandatory")
-        project_id = str(uuid.UUID(policy_q['tenant_id']))
+        project_id = self._project_id_neutron_to_vnc(policy_q['tenant_id'])
         policy_name = policy_q.get('name', None)
         try:
             project_obj = self._project_read(proj_id=project_id)

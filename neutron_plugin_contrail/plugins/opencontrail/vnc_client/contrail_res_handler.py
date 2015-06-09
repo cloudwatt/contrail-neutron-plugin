@@ -58,13 +58,18 @@ class ContrailResourceHandler(object):
         ids = []
         for project_id in project_ids:
             try:
-                ids.append(str(project_id))
+                ids.append(
+                    ContrailResourceHandler._project_id_neutron_to_vnc(
+                        project_id))
             except ValueError:
                 pass
         return ids
 
-    def _frame_project_id(self, proj_id):
+    def _project_id_vnc_to_neutron(self, proj_id):
         return proj_id.replace("-", "")
+
+    def _project_id_neutron_to_vnc(self, proj_id):
+        return str(uuid.UUID(proj_id))
 
     @staticmethod
     def _filter_res_dict(res_dict, fields):
@@ -75,7 +80,7 @@ class ContrailResourceHandler(object):
 
     def _project_read(self, proj_id=None, fq_name=None):
         if proj_id:
-            proj_id = str(uuid.UUID(proj_id))
+            proj_id = self._project_id_neutron_to_vnc(proj_id)
         return self._vnc_lib.project_read(id=proj_id, fq_name=fq_name)
 
     def _project_list_domain(self, domain_id):
@@ -158,7 +163,7 @@ class ResourceGetHandler(ContrailResourceHandler):
                 parent_id=pid, count=True, back_refs=False,
                 detail=False)[json_resource]['count']
 
-        ret = [count(str(pid) if pid else None)
+        ret = [count(self._project_id_neutron_to_vnc(pid) if pid else None)
                for pid in project_ids] if project_ids else [count(None)]
         return sum(ret)
 

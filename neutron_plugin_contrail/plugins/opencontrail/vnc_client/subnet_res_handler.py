@@ -19,6 +19,7 @@ import netaddr
 from vnc_api import vnc_api
 
 import contrail_res_handler as res_handler
+from contrail_res_handler import ContrailResourceHandler
 import vn_res_handler as vn_handler
 
 import logging
@@ -41,6 +42,13 @@ class SubnetMixin(object):
 
         network = netaddr.IPNetwork('%s/%s' % (pfx, pfx_len))
         return '%s %s/%s' % (net_id, str(network.ip), pfx_len)
+
+    def subnet_cidr_overlaps(self, subnet1, subnet2):
+        cidr = lambda sn: netaddr.IPNetwork('%s/%s' % (
+            sn.subnet.get_ip_prefix(), sn.subnet.get_ip_prefix_len()))
+        cidr1 = cidr(subnet1)
+        cidr2 = cidr(subnet2)
+        return cidr1.first <= cidr2.last and cidr2.first <= cidr1.last
 
     def _subnet_vnc_create_mapping(self, subnet_id, subnet_key):
         self._vnc_lib.kv_store(subnet_id, subnet_key)
@@ -140,7 +148,12 @@ class SubnetMixin(object):
                 first_ip = str(netaddr.IPNetwork(cidr).network + 2)
             else:
                 first_ip = str(netaddr.IPNetwork(cidr).network + 1)
-            last_ip = str(netaddr.IPNetwork(cidr).broadcast - 1)
+            if (int(netaddr.IPNetwork(gateway_ip).network)==
+                    int(netaddr.IPNetwork(cidr).broadcast - 1)):
+                last_ip = str(netaddr.IPNetwork(cidr).broadcast - 2)
+            else:
+                last_ip = str(netaddr.IPNetwork(cidr).broadcast - 1)
+
             cidr_pool = {'start': first_ip, 'end': last_ip}
             allocation_pools.append(cidr_pool)
 
@@ -162,32 +175,92 @@ class SubnetMixin(object):
 
         return ret_subnets
 
-    def _subnet_neutron_to_vnc(self, subnet_q):
+    @staticmethod
+    def _check_ip_matches_version(item, version):
+        if isinstance(item, list):
+            for i in item:
+                SubnetMixin._check_ip_matches_version(i, version)
+            return
+
+        if netaddr.IPNetwork(item).version != version:
+            ContrailResourceHandler._raise_contrail_exception(
+                'BadRequest', resource='subnet',
+                msg='Invalid IP address version')
+
+    @staticmethod
+    def _subnet_neutron_to_vnc(subnet_q):
         if not subnet_q.get('cidr'):
             self._raise_contrail_exception(
                 'BadRequest', msg='cidr is empty',
                 resource='subnet')
- 
-        cidr = netaddr.IPNetwork(subnet_q.get('cidr'))
+
+        cidr = netaddr.IPNetwork(subnet_q['cidr'])
         pfx = str(cidr.network)
         pfx_len = int(cidr.prefixlen)
+        if pfx_len == 0 and cidr.version == 4:
+            ContrailResourceHandler._raise_contrail_exception(
+                'BadRequest',
+                resource='subnet', msg="Invalid prefix len")
+        if pfx_len > 64 and cidr.version == 6:
+            ContrailResourceHandler._raise_contrail_exception(
+                'BadRequest',
+                resource='subnet', msg="Invalid prefix len")
         if cidr.version != 4 and cidr.version != 6:
-            self._raise_contrail_exception(
+            ContrailResourceHandler._raise_contrail_exception(
                 'BadRequest',
                 resource='subnet', msg='Unknown IP family')
         elif cidr.version != int(subnet_q['ip_version']):
             msg = ("cidr '%s' does not match the ip_version '%s'"
                    % (subnet_q['cidr'], subnet_q['ip_version']))
-            self._raise_contrail_exception(
+            ContrailResourceHandler._raise_contrail_exception(
                 'InvalidInput', error_message=msg, resource='subnet')
         if 'gateway_ip' in subnet_q:
             default_gw = subnet_q['gateway_ip']
+            gw_ip_obj = netaddr.IPAddress(default_gw)
+            if gw_ip_obj not in cidr or \
+                gw_ip_obj.words[-1] == 255 or \
+                gw_ip_obj.words[-1] == 0:
+                ContrailResourceHandler._raise_contrail_exception(
+                    'BadRequest', resource='subnet',
+                    msg="Invalid Gateway ip address")
         else:
             # Assigned first+1 from cidr
             default_gw = str(netaddr.IPAddress(cidr.first + 1))
 
+        if cidr.version == 4 and 'ipv6_address_mode' in subnet_q:
+            ContrailResourceHandler._raise_contrail_exception(
+                'BadRequest', resource='subnet',
+                msg="Invalid address mode with version")
+
         if 'allocation_pools' in subnet_q:
             alloc_pools = subnet_q['allocation_pools']
+            alloc_cidrs = []
+            for pool in alloc_pools:
+                ip_start = netaddr.IPAddress(pool['start'])
+                ip_end = netaddr.IPAddress(pool['end'])
+                if ip_start >= ip_end:
+                    ContrailResourceHandler._raise_contrail_exception(
+                        'BadRequest', resource='subnet',
+                        msg='Invalid address in allocation pool')
+
+                # Check if the pool overlaps with other pools
+                cidrs = netaddr.iprange_to_cidrs(ip_start, ip_end)
+                for cidr0 in alloc_cidrs:
+                    for cidr1 in cidrs:
+                        if cidr0.first <= cidr1.first and cidr1.last <= cidr0.last:
+                            ContrailResourceHandler._raise_contrail_exception(
+                                'BadRequest', resource='subnet',
+                                msg='Pool addresses overlap')
+                alloc_cidrs.extend(cidrs)
+
+            for cidr in alloc_cidrs:
+                if netaddr.IPAddress(default_gw) in cidr:
+                    ContrailResourceHandler._raise_contrail_exception(
+                        'GatewayConflictWithAllocationPools',
+                        ip_address=default_gw,
+                        pool=str(cidr),
+                        msg='Gw ip is part of allocation pools')
+
         else:
             # Assigned by address manager
             alloc_pools = None
@@ -206,6 +279,10 @@ class SubnetMixin(object):
         if 'host_routes' in subnet_q and subnet_q['host_routes']:
             host_routes = []
             for host_route in subnet_q['host_routes']:
+                SubnetMixin._check_ip_matches_version(
+                    [host_route['destination'], host_route['nexthop']],
+                    cidr.version)
+
                 host_routes.append(vnc_api.RouteType(
                     prefix=host_route['destination'],
                     next_hop=host_route['nexthop']))
@@ -239,7 +316,7 @@ class SubnetMixin(object):
             sn_q_dict['name'] = sn_name
         else:
             sn_q_dict['name'] = ''
-        sn_q_dict['tenant_id'] = vn_obj.parent_uuid.replace('-', '')
+        sn_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(vn_obj.parent_uuid)
         sn_q_dict['network_id'] = vn_obj.uuid
         sn_q_dict['ipv6_ra_mode'] = None
         sn_q_dict['ipv6_address_mode'] = None
@@ -342,7 +419,7 @@ class SubnetCreateHandler(res_handler.ResourceCreateHandler, SubnetMixin):
             vn_obj.add_network_ipam(netipam_obj, vnsn_data)
         else:  # virtual-network already linked to this ipam
             for subnet in net_ipam_ref['attr'].get_ipam_subnets():
-                if subnet_key == self._subnet_vnc_get_key(subnet, net_id):
+                if self.subnet_cidr_overlaps(subnet_vnc, subnet):
                     existing_sn_id = self._subnet_vnc_read_mapping(
                         key=subnet_key)
                     # duplicate !!
@@ -504,6 +581,9 @@ class SubnetUpdateHandler(res_handler.ResourceUpdateHandler, SubnetMixin):
 
     def _subnet_update(self, subnet_q, subnet_id, vn_obj, subnet_vnc,
                        ipam_ref, apply_subnet_host_routes=False):
+        subnet_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
+                                 subnet_vnc.subnet.get_ip_prefix_len())
+        cidr_version = netaddr.IPNetwork(subnet_cidr).version
         if subnet_q.get('name') is not None:
             subnet_vnc.set_subnet_name(subnet_q['name'])
 
@@ -516,6 +596,8 @@ class SubnetUpdateHandler(res_handler.ResourceUpdateHandler, SubnetMixin):
         if subnet_q.get('dns_nameservers') is not None:
             dhcp_options = []
             dns_servers = " ".join(subnet_q['dns_nameservers'])
+            self._check_ip_matches_version(subnet_q['dns_nameservers'],
+                                           cidr_version)
             if dns_servers:
                 dhcp_options.append(vnc_api.DhcpOptionType(
                     dhcp_option_name='6', dhcp_option_value=dns_servers))
@@ -528,13 +610,15 @@ class SubnetUpdateHandler(res_handler.ResourceUpdateHandler, SubnetMixin):
         if subnet_q.get('host_routes') is not None:
             host_routes = []
             for host_route in subnet_q['host_routes']:
+                self._check_ip_matches_version(
+                    [host_route['destination'], host_route['nexthop']],
+                    cidr_version)
                 host_routes.append(vnc_api.RouteType(
                     prefix=host_route['destination'],
                     next_hop=host_route['nexthop']))
+
             if apply_subnet_host_routes:
                 old_host_routes = subnet_vnc.get_host_routes()
-                subnet_cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
-                                         subnet_vnc.subnet.get_ip_prefix_len())
                 subnet_host_handler = SubnetHostRoutesHandler(self._vnc_lib)
                 subnet_host_handler.port_update_iface_route_table(
                     vn_obj, subnet_cidr, subnet_id, host_routes,
@@ -552,6 +636,7 @@ class SubnetUpdateHandler(res_handler.ResourceUpdateHandler, SubnetMixin):
         return ret_subnet_q
 
     def resource_update(self, context, subnet_id, subnet_q):
+        print " -- Resource update - subnet_q %s" % subnet_q
         apply_subnet_host_routes = self._kwargs.get(
             'apply_subnet_host_routes', False)
         if 'gateway_ip' in subnet_q:

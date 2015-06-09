@@ -127,7 +127,8 @@ class VNetworkMixin(object):
         else:
             net_q_dict['name'] = vn_obj.display_name
 
-        net_q_dict['tenant_id'] = vn_obj.parent_uuid.replace('-', '')
+        net_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
+            vn_obj.parent_uuid)
         net_q_dict['admin_state_up'] = id_perms.enable
         net_q_dict['shared'] = True if vn_obj.is_shared else False
         net_q_dict['status'] = (n_constants.NET_STATUS_ACTIVE
@@ -148,7 +149,7 @@ class VNetworkMixin(object):
         return net_q_dict
 
     def get_vn_tenant_id(self, vn_obj):
-        return vn_obj.parent_uuid.replace('-', '')
+        return self._project_id_vnc_to_neutron(vn_obj.parent_uuid)
 
 
 class VNetworkCreateHandler(res_handler.ResourceCreateHandler, VNetworkMixin):
@@ -160,7 +161,7 @@ class VNetworkCreateHandler(res_handler.ResourceCreateHandler, VNetworkMixin):
                 'BadRequest', resource='network',
                 msg="'tenant_id' is mandatory")
         net_name = network_q.get('name', None)
-        project_id = str(network_q['tenant_id'])
+        project_id = self._project_id_neutron_to_vnc(network_q['tenant_id'])
         try:
             proj_obj = self._project_read(proj_id=project_id)
         except vnc_exc.NoIdError:
@@ -271,7 +272,7 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
     def _network_list_project(self, project_id, count=False):
         if project_id:
             try:
-                project_uuid = str(project_id)
+                project_uuid = self._project_id_neutron_to_vnc(project_id)
             except Exception:
                 print("Error in converting uuid %s" % (project_id))
         else:
@@ -355,7 +356,7 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
                   'shared' in filters):
                 all_net_objs.extend(self._network_list_shared_and_ext())
             else:
-                project_uuid = str(context['tenant'])
+                project_uuid = self._project_id_neutron_to_vnc(context['tenant'])
                 if not filters:
                     all_net_objs.extend(self._network_list_router_external())
                     all_net_objs.extend(self._network_list_shared())
@@ -458,7 +459,7 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
     def get_vn_list_project(self, project_id, count=False):
         if project_id:
             try:
-                project_uuid = str(project_id)
+                project_uuid = self._project_id_neutron_to_vnc(project_id)
             except ValueError:
                 project_uuid = None
         else:

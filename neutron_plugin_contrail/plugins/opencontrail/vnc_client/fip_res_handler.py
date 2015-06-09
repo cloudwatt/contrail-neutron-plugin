@@ -75,7 +75,8 @@ class FloatingIpMixin(object):
 
         floating_net_id = self._vnc_lib.fq_name_to_id(
             'virtual-network', fip_obj.get_fq_name()[:-2])
-        tenant_id = fip_obj.get_project_refs()[0]['uuid'].replace('-', '')
+        tenant_id = self._project_id_vnc_to_neutron(
+            fip_obj.get_project_refs()[0]['uuid'])
 
         port_id = None
         router_id = None
@@ -132,7 +133,7 @@ class FloatingIpCreateHandler(res_handler.ResourceCreateHandler,
         fip_obj = vnc_api.FloatingIp(fip_name, fip_pool_obj)
         fip_obj.uuid = fip_name
 
-        proj_id = str(uuid.UUID(fip_q['tenant_id']))
+        proj_id = self._project_id_neutron_to_vnc(fip_q['tenant_id'])
         proj_obj = self._project_read(proj_id=proj_id)
         fip_obj.set_project(proj_obj)
         return fip_obj
@@ -208,7 +209,7 @@ class FloatingIpGetHandler(res_handler.ResourceGetHandler, FloatingIpMixin):
                 port_ids = filters['port_id']
         else:  # no filters
             if not context['is_admin']:
-                proj_ids = [str(uuid.UUID(context['tenant']))]
+                proj_ids = [self._project_id_neutron_to_vnc(context['tenant'])]
 
         if port_ids:
             fip_objs = self._resource_list(back_ref_id=port_ids)

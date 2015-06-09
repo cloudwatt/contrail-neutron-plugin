@@ -250,9 +250,9 @@ class VMInterfaceMixin(object):
             port_req_memo['subnets'][net_id] = subnets_info
 
         if vmi_obj.parent_type != "project":
-            proj_id = vn_obj.parent_uuid.replace('-', '')
+            proj_id = self._project_id_vnc_to_neutron(vn_obj.parent_uuid)
         else:
-            proj_id = vmi_obj.parent_uuid.replace('-', '')
+            proj_id = self._project_id_vnc_to_neutron(vmi_obj.parent_uuid)
 
         port_q_dict['tenant_id'] = proj_id
         port_q_dict['network_id'] = net_id
@@ -526,7 +526,7 @@ class VMInterfaceMixin(object):
             vn_obj = vn_get_handler._resource_get(id=net_id)
             return vn_get_handler.get_vn_tenant_id(vn_obj)
 
-        return vmi_obj.parent_uuid.replace('-', '')
+        return self._project_id_vnc_to_neutron(vmi_obj.parent_uuid)
 
 
 class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
@@ -558,7 +558,7 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
                         resource='port')
 
     def _create_vmi_obj(self, port_q, vn_obj):
-        project_id = str(port_q['tenant_id'])
+        project_id = self._project_id_neutron_to_vnc(port_q['tenant_id'])
         try:
             proj_obj = self._project_read(proj_id=project_id)
         except vnc_exc.NoIdError:
@@ -609,7 +609,7 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
                 'NetworkNotFound', net_id=net_id, resource='port')
 
         tenant_id = self._get_tenant_id_for_create(context, port_q)
-        proj_id = str(tenant_id)
+        proj_id = self._project_id_neutron_to_vnc(tenant_id)
 
         # if mac-address is specified, check against the exisitng ports
         # to see if there exists a port with the same mac-address
@@ -860,7 +860,7 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
         tenant_ids = []
         if not context['is_admin']:
             tenant_ids = [context['tenant']]
-            project_ids = [str(context['tenant'])]
+            project_ids = [self._project_id_neutron_to_vnc(context['tenant'])]
         elif 'tenant_id' in filters:
             tenant_ids = filters['tenant_id']
             project_ids = self._validate_project_ids(context,
@@ -932,9 +932,9 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
 
         if 'tenant_id' in filters:
             if isinstance(filters['tenant_id'], list):
-                project_id = str(filters['tenant_id'][0])
+                project_id = self._project_id_neutron_to_vnc(filters['tenant_id'][0])
             else:
-                project_id = str(filters['tenant_id'])
+                project_id = self._project_id_neutron_to_vnc(filters['tenant_id'])
 
             nports = len(self._resource_list(parent_id=project_id))
         else:
