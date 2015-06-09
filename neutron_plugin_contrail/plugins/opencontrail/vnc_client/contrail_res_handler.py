@@ -74,6 +74,8 @@ class ContrailResourceHandler(object):
         return new_res_dict
 
     def _project_read(self, proj_id=None, fq_name=None):
+        if proj_id:
+            proj_id = str(uuid.UUID(proj_id))
         return self._vnc_lib.project_read(id=proj_id, fq_name=fq_name)
 
     def _project_list_domain(self, domain_id):
