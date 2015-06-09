@@ -260,6 +260,15 @@ class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
     def test_create_subnet_ipv6_same_ra_and_addr_modes(self):
         self.skipTest("TODO: Investigate what needs to be done")
 
+    def test_port_prevents_subnet_deletion(self):
+        self.skipTest("TODO: Very tough to mock this in vnc_mock")
+
+    def test_delete_subnet_ipv6_slaac_router_port_exists(self):
+        self.skipTest("TODO: Very tough to mock this in vnc_mock")
+
+    def test_delete_subnet_ipv6_slaac_port_exists(self):
+        self.skipTest("TODO: Very tough to mock this in vnc_mock")
+
     def test_create_subnet_ipv6_different_ra_and_addr_modes(self):
         self.skipTest("TODO: Investigate what needs to be done")
 
@@ -282,6 +291,9 @@ class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
         self.skipTest("TODO: Check why this should fail")
 
     # Support ipv6 in contrail is planned in Juno
+    def test_create_subnet_ipv6_gw_values(self):
+        self.skipTest("Contrail isn't supporting ipv6 yet")
+
     def test_update_subnet_ipv6_cannot_disable_dhcp(self):
         self.skipTest("Contrail isn't supporting ipv6 yet")
 

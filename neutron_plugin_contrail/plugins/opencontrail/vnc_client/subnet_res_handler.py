@@ -45,10 +45,10 @@ class SubnetMixin(object):
 
     def subnet_cidr_overlaps(self, subnet1, subnet2):
         cidr = lambda sn: netaddr.IPNetwork('%s/%s' % (
-            sn.get_ip_prefix(), sn.get_ip_prefix_len))
+            sn.subnet.get_ip_prefix(), sn.subnet.get_ip_prefix_len()))
         cidr1 = cidr(subnet1)
         cidr2 = cidr(subnet2)
-        return cidr0.first <= cidr1.last and cidr1.first <= cidr0.last
+        return cidr1.first <= cidr2.last and cidr2.first <= cidr1.last
 
     def _subnet_vnc_create_mapping(self, subnet_id, subnet_key):
         self._vnc_lib.kv_store(subnet_id, subnet_key)
@@ -175,14 +175,15 @@ class SubnetMixin(object):
 
         return ret_subnets
 
-    def _check_ip_matches_version(self, item, version):
+    @staticmethod
+    def _check_ip_matches_version(item, version):
         if isinstance(item, list):
             for i in item:
-                self._check_ip_matches_version(i, version)
+                SubnetMixin._check_ip_matches_version(i, version)
             return
 
         if netaddr.IPNetwork(item).version != version:
-            self._raise_contrail_exception(
+            ContrailResourceHandler._raise_contrail_exception(
                 'BadRequest', resource='subnet',
                 msg='Invalid IP address version')
 
@@ -252,6 +253,14 @@ class SubnetMixin(object):
                                 msg='Pool addresses overlap')
                 alloc_cidrs.extend(cidrs)
 
+            for cidr in alloc_cidrs:
+                if netaddr.IPAddress(default_gw) in cidr:
+                    ContrailResourceHandler._raise_contrail_exception(
+                        'GatewayConflictWithAllocationPools',
+                        ip_address=default_gw,
+                        pool=str(cidr),
+                        msg='Gw ip is part of allocation pools')
+
         else:
             # Assigned by address manager
             alloc_pools = None
@@ -270,7 +279,7 @@ class SubnetMixin(object):
         if 'host_routes' in subnet_q and subnet_q['host_routes']:
             host_routes = []
             for host_route in subnet_q['host_routes']:
-                self._check_ip_matches_version(
+                SubnetMixin._check_ip_matches_version(
                     [host_route['destination'], host_route['nexthop']],
                     cidr.version)
 

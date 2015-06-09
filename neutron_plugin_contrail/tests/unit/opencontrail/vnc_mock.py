@@ -150,6 +150,25 @@ class MockVnc(object):
             return ret
 
     class CreateCallables(Callables):
+        def _mock_add_network_ipam(self, obj):
+            actual = obj.add_network_ipam
+            def _mock(obj, vnsn_data):
+                if 'network_ipam' not in self._resource_collection:
+                    self._resource_collection['network_ipam'] = dict()
+
+                fq_name_str = obj.get_fq_name_str()
+                if not obj.uuid:
+                    obj.uuid = UUID.uuid4()
+                uid = obj.uuid
+
+                d = self._resource_collection['network_ipam']
+                d[uid] = obj
+                d[fq_name_str] = obj
+
+                return actual(obj, vnsn_data)
+
+            obj.add_network_ipam = _mock
+
         def __call__(self, obj):
             if not obj:
                 raise ValueError("Create called with null object")
@@ -236,6 +255,10 @@ class MockVnc(object):
                     setattr(proj_obj, 'security_groups', [sg_ref])
                 else:
                     sgs.append(sg_ref)
+
+            elif self._resource_type == 'virtual-network':
+                self._mock_add_network_ipam(obj)
+
             return uuid
 
     class UpdateCallables(Callables):
