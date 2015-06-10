@@ -260,6 +260,9 @@ class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
     def test_create_subnet_ipv6_same_ra_and_addr_modes(self):
         self.skipTest("TODO: Investigate what needs to be done")
 
+    def test_delete_subnet_port_exists_owned_by_other(self):
+        self.skipTest("TODO: Very tough to mock this in vnc_mock")
+
     def test_port_prevents_subnet_deletion(self):
         self.skipTest("TODO: Very tough to mock this in vnc_mock")
 
@@ -274,6 +277,12 @@ class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
 
     def test_create_subnet_ipv6_ra_modes(self):
         self.skipTest("TODO: Investigate what needs to be done")
+
+    def test_update_subnet(self):
+        self.skipTest("Contrail does not support updating gateway ip")
+
+    def test_update_subnet_no_gateway(self):
+        self.skipTest("Contrail does not support updating gateway ip")
 
     def test_update_subnet_route_with_too_many_entries(self):
         self.skipTest("TODO: Investigate - contrail support mutliple host routes")
@@ -291,6 +300,12 @@ class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
         self.skipTest("TODO: Check why this should fail")
 
     # Support ipv6 in contrail is planned in Juno
+    def test_create_subnet_ipv6_ra_mode_ip_version_4(self):
+        self.skipTest("Contrail isn't supporting ipv6 yet")
+
+    def test_create_subnet_with_v6_allocation_pool(self):
+        self.skipTest("Contrail isn't supporting ipv6 yet")
+
     def test_create_subnet_ipv6_gw_values(self):
         self.skipTest("Contrail isn't supporting ipv6 yet")
 
@@ -303,10 +318,16 @@ class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
     def test_update_subnet_ipv6_attributes(self):
         self.skipTest("Contrail isn't supporting ipv6 yet")
 
+    def test_create_subnet_ipv6_out_of_cidr_lla(self):
+        self.skipTest("Contrail isn't supporting ipv6 yet")
+
     def test_update_subnet_ipv6_inconsistent_address_attribute(self):
         self.skipTest("Contrail isn't supporting ipv6 yet")
 
     def test_update_subnet_ipv6_inconsistent_enable_dhcp(self):
+        self.skipTest("Contrail isn't supporting ipv6 yet")
+
+    def test_create_subnet_inconsistent_ipv6_dns_v4(self):
         self.skipTest("Contrail isn't supporting ipv6 yet")
 
     def test_update_subnet_ipv6_inconsistent_ra_attribute(self):

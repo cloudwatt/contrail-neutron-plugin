@@ -65,10 +65,12 @@ class ContrailResourceHandler(object):
                 pass
         return ids
 
-    def _project_id_vnc_to_neutron(self, proj_id):
+    @staticmethod
+    def _project_id_vnc_to_neutron(proj_id):
         return proj_id.replace("-", "")
 
-    def _project_id_neutron_to_vnc(self, proj_id):
+    @staticmethod
+    def _project_id_neutron_to_vnc(proj_id):
         return str(uuid.UUID(proj_id))
 
     @staticmethod
