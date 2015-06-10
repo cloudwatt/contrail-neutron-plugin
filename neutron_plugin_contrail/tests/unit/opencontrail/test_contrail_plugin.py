@@ -54,137 +54,6 @@ from neutron_plugin_contrail.plugins.opencontrail.vnc_client import contrail_res
 CONTRAIL_PKG_PATH = "neutron_plugin_contrail.plugins.opencontrail.contrail_plugin_v3"
 
 
-class FakeServer(db_base_plugin_v2.NeutronDbPluginV2,
-                 external_net_db.External_net_db_mixin,
-                 securitygroups_db.SecurityGroupDbMixin,
-                 l3_db.L3_NAT_db_mixin):
-    """FakeServer for contrail api server.
-
-    This class mocks behaviour of contrail API server.
-    """
-    supported_extension_aliases = ['external-net', 'router', 'floatingip']
-
-    @property
-    def _core_plugin(self):
-        return self
-
-    def create_port(self, context, port):
-        self._ensure_default_security_group_on_port(context, port)
-        sgids = self._get_security_groups_on_port(context, port)
-        result = super(FakeServer, self).create_port(context, port)
-        self._process_port_create_security_group(context, result, sgids)
-        return result
-
-    def update_port(self, context, id, port):
-        original_port = self.get_port(context, id)
-        updated_port = super(FakeServer, self).update_port(context, id, port)
-        port_updates = port['port']
-        if ext_sg.SECURITYGROUPS in port_updates:
-            port_updates[ext_sg.SECURITYGROUPS] = (
-                self._get_security_groups_on_port(context, port))
-            self._delete_port_security_group_bindings(context, id)
-            self._process_port_create_security_group(
-                context,
-                updated_port,
-                port_updates[ext_sg.SECURITYGROUPS])
-        else:
-            updated_port[ext_sg.SECURITYGROUPS] = (
-                original_port[ext_sg.SECURITYGROUPS])
-
-        return updated_port
-
-    def delete_port(self, context, id, l3_port_check=True):
-        if l3_port_check:
-            self.prevent_l3_port_deletion(context, id)
-        self.disassociate_floatingips(context, id)
-        super(FakeServer, self).delete_port(context, id)
-
-    def create_network(self, context, network):
-        net_data = network['network']
-        tenant_id = self._get_tenant_id_for_create(context, net_data)
-        self._ensure_default_security_group(context, tenant_id)
-        result = super(FakeServer, self).create_network(context, network)
-        self._process_l3_create(context, result, network['network'])
-        return result
-
-    def update_network(self, context, id, network):
-        with context.session.begin(subtransactions=True):
-            result = super(
-                FakeServer, self).update_network(context, id, network)
-            self._process_l3_update(context, result, network['network'])
-        return result
-
-    def delete_network(self, context, id):
-        self.delete_disassociated_floatingips(context, id)
-        super(FakeServer, self).delete_network(context, id)
-
-    def request(self, *args, **kwargs):
-        request_data = json.loads(kwargs['data'])
-        context_dict = request_data['context']
-        context = neutron_context.Context.from_dict(context_dict)
-        resource_type = context_dict['type']
-        operation = context_dict['operation']
-        data = request_data['data']
-        resource = None
-        if data.get('resource'):
-            body = data['resource']
-            if resource_type not in [
-                    'security_group_rule', 'router', 'floatingip']:
-                for key, value in body.items():
-                    if value is None:
-                        body[key] = attr.ATTR_NOT_SPECIFIED
-            resource = {resource_type: body}
-
-        obj = {}
-        code = webob.exc.HTTPOk.code
-        try:
-            if operation == 'READ':
-                func = getattr(self, 'get_%s' % resource_type)
-                obj = func(context, data['id'])
-            if operation == 'READALL':
-                func = getattr(self, 'get_%ss' % resource_type)
-                obj = func(context, filters=data.get('filters'))
-            if operation == 'READCOUNT':
-                func = getattr(self, 'get_%ss_count' % resource_type)
-                count = func(context, filters=data.get('filters'))
-                obj = {'count': count}
-            if operation == 'CREATE':
-                func = getattr(self, 'create_%s' % resource_type)
-                obj = func(context, resource)
-            if operation == 'UPDATE':
-                func = getattr(self, 'update_%s' % resource_type)
-                obj = func(context, data['id'], resource)
-            if operation == 'DELETE':
-                func = getattr(self, 'delete_%s' % resource_type)
-                obj = func(context, data['id'])
-            if operation == 'ADDINTERFACE':
-                obj = self.add_router_interface(
-                    context, data['id'], data['resource'])
-            if operation == 'DELINTERFACE':
-                obj = self.remove_router_interface(
-                    context, data['id'], data['resource'])
-        except (exc.NeutronException,
-                netaddr.AddrFormatError) as e:
-            for fault in api_base.FAULT_MAP:
-                if isinstance(e, fault):
-                    mapped_exc = api_base.FAULT_MAP[fault]
-                    code = mapped_exc.code
-            obj = {'type': e.__class__.__name__,
-                   'message': e.msg, 'detail': ''}
-            if data.get('id'):
-                obj['id'] = data.get('id')
-        response = mock.MagicMock()
-        response.status_code = code
-
-        def return_obj():
-            return obj
-        response.json = return_obj
-        return response
-
-
-FAKE_SERVER = FakeServer()
-
-
 class Context(object):
     def __init__(self, tenant_id=''):
         self.read_only = False
@@ -241,6 +110,12 @@ class TestContrailNetworksV2(test_plugin.TestNetworksV2,
                              JVContrailPluginTestCase):
     def setUp(self):
         super(TestContrailNetworksV2, self).setUp()
+
+    def test_create_network_default_mtu(self):
+        self.skipTest("Contrail doesn't support this feature yet")
+
+    def test_create_network_vlan_transparent(self):
+        self.skipTest("Contrail doesn't support this feature yet")
 
 
 class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
@@ -335,26 +210,6 @@ class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
 
     def test_delete_subnet_dhcp_port_associated_with_other_subnets(self):
         self.skipTest("There is no dhcp port in contrail")
-
-    def _helper_test_validate_subnet(self, option, exception):
-        cfg.CONF.set_override(option, 0)
-        with self.network() as network:
-            subnet = {'network_id': network['network']['id'],
-                      'cidr': '10.0.2.0/24',
-                      'ip_version': 4,
-                      'tenant_id': network['network']['tenant_id'],
-                      'gateway_ip': '10.0.2.1',
-                      'dns_nameservers': ['8.8.8.8'],
-                      'host_routes': [{'destination': '135.207.0.0/16',
-                                       'nexthop': '1.2.3.4'}]}
-            e = self.assertRaises(exception,
-                                  FAKE_SERVER._validate_subnet,
-                                  neutron_context.get_admin_context(
-                                      load_admin_roles=False),
-                                  subnet)
-            self.assertThat(
-                str(e),
-                matchers.Not(matchers.Contains('built-in function id')))
 
 
 class TestContrailPortsV2(test_plugin.TestPortsV2,
