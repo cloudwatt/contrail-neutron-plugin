@@ -581,8 +581,8 @@ class SubnetGetHandler(res_handler.ResourceGetHandler, SubnetMixin):
                 net_id = subnet_key.split()[0]
                 net_ids.append(net_id)
 
-            all_vn_objs.extend(vn_get_handler.get_vn_list(obj_uuids=net_ids,
-                                                          detail=True))
+            all_vn_objs.extend(vn_get_handler.get_vn_obj_list(
+                obj_uuids=net_ids, detail=True))
         else:
             if not context['is_admin']:
                 proj_id = context['tenant']
