@@ -219,7 +219,7 @@ class VNetworkUpdateHandler(res_handler.ResourceUpdateHandler, VNetworkMixin):
                         'NetworkInUse', net_id=vn_obj.uuid, resource='network')
 
     def _validate_shared_attr(self, is_shared, vn_obj):
-        if is_shared and not vn_obj.is_shared:
+        if not is_shared and vn_obj.is_shared:
             for vmi in vn_obj.get_virtual_machine_interface_back_refs() or []:
                 vmi_obj = vmi_handler.VMInterfaceHandler(
                     self._vnc_lib).get_vmi_obj(vmi['uuid'])
@@ -421,6 +421,13 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
                 is_shared = net_obj.is_shared
             if not self._filters_is_present(
                     filters, 'shared', is_shared):
+                continue
+            if net_obj.get_id_perms() is None:
+                admin_state_up = False
+            else:
+                admin_state_up = net_obj.get_id_perms().enable
+            if not self._filters_is_present(
+                filters, 'admin_state_up', admin_state_up):
                 continue
             try:
                 net_info = self.vn_to_neutron_dict(

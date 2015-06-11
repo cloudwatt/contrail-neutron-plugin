@@ -143,13 +143,15 @@ class SubnetMixin(object):
             allocation_pools.append(alloc_dict)
 
         if not allocation_pools:
-            if (int(netaddr.IPNetwork(gateway_ip).network) ==
-                    int(netaddr.IPNetwork(cidr).network+1)):
+            if gateway_ip and (int(
+                    netaddr.IPNetwork(gateway_ip).network) == int(
+                    netaddr.IPNetwork(cidr).network+1)):
                 first_ip = str(netaddr.IPNetwork(cidr).network + 2)
             else:
                 first_ip = str(netaddr.IPNetwork(cidr).network + 1)
-            if (int(netaddr.IPNetwork(gateway_ip).network)==
-                    int(netaddr.IPNetwork(cidr).broadcast - 1)):
+            if gateway_ip and (int(
+                    netaddr.IPNetwork(gateway_ip).network) == int(
+                    netaddr.IPNetwork(cidr).broadcast - 1)):
                 last_ip = str(netaddr.IPNetwork(cidr).broadcast - 2)
             else:
                 last_ip = str(netaddr.IPNetwork(cidr).broadcast - 1)
@@ -201,10 +203,6 @@ class SubnetMixin(object):
             ContrailResourceHandler._raise_contrail_exception(
                 'BadRequest',
                 resource='subnet', msg="Invalid prefix len")
-        if pfx_len > 64 and cidr.version == 6:
-            ContrailResourceHandler._raise_contrail_exception(
-                'BadRequest',
-                resource='subnet', msg="Invalid prefix len")
         if cidr.version != 4 and cidr.version != 6:
             ContrailResourceHandler._raise_contrail_exception(
                 'BadRequest',
@@ -214,15 +212,17 @@ class SubnetMixin(object):
                    % (subnet_q['cidr'], subnet_q['ip_version']))
             ContrailResourceHandler._raise_contrail_exception(
                 'InvalidInput', error_message=msg, resource='subnet')
+
         if 'gateway_ip' in subnet_q:
             default_gw = subnet_q['gateway_ip']
             gw_ip_obj = netaddr.IPAddress(default_gw)
-            if gw_ip_obj not in cidr or \
-                gw_ip_obj.words[-1] == 255 or \
-                gw_ip_obj.words[-1] == 0:
-                ContrailResourceHandler._raise_contrail_exception(
-                    'BadRequest', resource='subnet',
-                    msg="Invalid Gateway ip address")
+            if default_gw != '0.0.0.0':
+                if gw_ip_obj not in cidr or \
+                    gw_ip_obj.words[-1] == 255 or \
+                    gw_ip_obj.words[-1] == 0:
+                    ContrailResourceHandler._raise_contrail_exception(
+                        'BadRequest', resource='subnet',
+                        msg="Invalid Gateway ip address")
         else:
             # Assigned first+1 from cidr
             default_gw = str(netaddr.IPAddress(cidr.first + 1))
@@ -236,25 +236,42 @@ class SubnetMixin(object):
             alloc_pools = subnet_q['allocation_pools']
             alloc_cidrs = []
             for pool in alloc_pools:
-                ip_start = netaddr.IPAddress(pool['start'])
-                ip_end = netaddr.IPAddress(pool['end'])
+                try:
+                    ip_start = netaddr.IPAddress(pool['start'])
+                    ip_end = netaddr.IPAddress(pool['end'])
+                except netaddr.core.AddrFormatError:
+                    ContrailResourceHandler._raise_contrail_exception(
+                        'BadRequest', resource='subnet',
+                        msg="Invalid IP address in allocation pool")
                 if ip_start >= ip_end:
                     ContrailResourceHandler._raise_contrail_exception(
                         'BadRequest', resource='subnet',
                         msg='Invalid address in allocation pool')
 
+                if ip_start not in cidr or ip_end not in cidr:
+                    ContrailResourceHandler._raise_contrail_exception(
+                        'BadRequest', resource='subnet',
+                        msg="Pool addresses not in subnet range")
                 # Check if the pool overlaps with other pools
-                cidrs = netaddr.iprange_to_cidrs(ip_start, ip_end)
-                for cidr0 in alloc_cidrs:
-                    for cidr1 in cidrs:
-                        if cidr0.first <= cidr1.first and cidr1.last <= cidr0.last:
-                            ContrailResourceHandler._raise_contrail_exception(
-                                'BadRequest', resource='subnet',
-                                msg='Pool addresses overlap')
-                alloc_cidrs.extend(cidrs)
+                for rng in alloc_cidrs:
+                    if rng['start'] <= ip_start and ip_end <= rng['end']:
+                        ContrailResourceHandler._raise_contrail_exception(
+                            'BadRequest', resource='subnet',
+                            msg='Pool addresses invalid')
+                    elif (rng['start'] >= ip_start and rng['start'] <= ip_end) or \
+                         (rng['end'] >= ip_start and rng['end'] <= ip_end):
+                         ContrailResourceHandler._raise_contrail_exception(
+                            'OverlappingAllocationPools',
+                            pool_2="%s-%s" % (ip_start, ip_end),
+                            pool_1="%s-%s" % (rng['start'], rng['end']),
+                            subnet_cidr=str(cidr))
+                alloc_cidrs.append({'start': ip_start, 'end': ip_end})
 
-            for cidr in alloc_cidrs:
-                if netaddr.IPAddress(default_gw) in cidr:
+            gw_ip_obj = netaddr.IPAddress(default_gw)
+            for rng in alloc_cidrs:
+                st = rng['start']
+                end = rng['end']
+                if st <= gw_ip_obj and end >= gw_ip_obj:
                     ContrailResourceHandler._raise_contrail_exception(
                         'GatewayConflictWithAllocationPools',
                         ip_address=default_gw,
@@ -336,7 +353,8 @@ class SubnetMixin(object):
 
         sn_q_dict['id'] = sn_id
 
-        sn_q_dict['gateway_ip'] = subnet_vnc.default_gateway
+        sn_q_dict['gateway_ip'] = subnet_vnc.default_gateway \
+            if subnet_vnc.default_gateway != '0.0.0.0' else None
 
         sn_q_dict['allocation_pools'] = self._get_allocation_pools_dict(
             subnet_vnc.get_allocation_pools(), sn_q_dict['gateway_ip'], cidr)
@@ -541,7 +559,10 @@ class SubnetGetHandler(res_handler.ResourceGetHandler, SubnetMixin):
                                                         'name',
                                                         sn_name):
                             continue
-
+                        if not self._filters_is_present(filters,
+                                                        'ip_version',
+                                                        sn_info['ip_version']):
+                            continue
                     if fields:
                         sn_info = self._filter_res_dict(sn_info, fields)
                     ret_subnets.append(sn_info)
@@ -636,7 +657,6 @@ class SubnetUpdateHandler(res_handler.ResourceUpdateHandler, SubnetMixin):
         return ret_subnet_q
 
     def resource_update(self, context, subnet_id, subnet_q):
-        print " -- Resource update - subnet_q %s" % subnet_q
         apply_subnet_host_routes = self._kwargs.get(
             'apply_subnet_host_routes', False)
         if 'gateway_ip' in subnet_q:
