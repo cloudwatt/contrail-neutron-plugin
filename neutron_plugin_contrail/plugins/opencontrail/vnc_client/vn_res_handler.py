@@ -229,7 +229,7 @@ class VNetworkUpdateHandler(res_handler.ResourceUpdateHandler, VNetworkMixin):
                         'InvalidSharedSetting',
                         network=vn_obj.display_name, resource='network')
 
-    def get_vn_obj(self, network_q):
+    def _get_vn_obj_from_net_q(self, network_q):
         try:
             vn_obj = self._resource_get(id=network_q['id'])
         except vnc_exc.NoIdError:
@@ -254,7 +254,8 @@ class VNetworkUpdateHandler(res_handler.ResourceUpdateHandler, VNetworkMixin):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
         network_q['id'] = net_id
-        vn_obj = self.neutron_dict_to_vn(self.get_vn_obj(network_q), network_q)
+        vn_obj = self.neutron_dict_to_vn(self._get_vn_obj_from_net_q(
+                                            network_q), network_q)
         self._resource_update(vn_obj)
 
         ret_network_q = self.vn_to_neutron_dict(
