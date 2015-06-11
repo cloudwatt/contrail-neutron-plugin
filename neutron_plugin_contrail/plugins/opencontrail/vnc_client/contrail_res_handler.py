@@ -267,4 +267,4 @@ class InstanceIpHandler(ResourceGetHandler, ResourceCreateHandler,
         if ip_addr:
             ip_obj.set_instance_ip_address(ip_addr)
         ip_id = self._resource_create(ip_obj)
-        return ip_id
+        return ip_obj

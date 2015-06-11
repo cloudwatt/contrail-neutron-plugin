@@ -14,6 +14,8 @@
 
 import json
 import uuid as UUID
+import netaddr
+from neutron.common import ipv6_utils
 
 from cfgm_common import exceptions as vnc_exc
 from vnc_api import vnc_api
@@ -227,9 +229,9 @@ class MockVnc(object):
                     obj.set_virtual_machine_interface_mac_addresses(
                         vnc_api.MacAddressesType([random_mac()]))
             elif self._resource_type == "instance-ip":
+                vn = obj.get_virtual_network_refs()[0]['uuid']
+                vn_obj = self._resource_collection['virtual_network'][vn]
                 if not obj.get_instance_ip_address():
-                    vn = obj.get_virtual_network_refs()[0]['uuid']
-                    vn_obj = self._resource_collection['virtual_network'][vn]
                     subnet = None
                     if not obj.subnet_uuid:
                         subnet = vn_obj.get_network_ipam_refs()[0]['attr'].get_ipam_subnets()[0]
@@ -241,9 +243,34 @@ class MockVnc(object):
                                     break
 
                     if subnet:
-                        ip_address = subnet.subnet.ip_prefix + '1'
+                        subnet_cidr = '%s/%s' % (
+                            subnet.subnet.ip_prefix, subnet.subnet.ip_prefix_len)
+                        cidr_obj = netaddr.IPNetwork(subnet_cidr)
+                        if not hasattr(subnet.subnet, 'ip_prefixed'):
+                            setattr(subnet.subnet, "ip_prefixed", 2)
+                        else:
+                            subnet.subnet.ip_prefixed += 1
+                        ip_address = str(netaddr.IPAddress(
+                            subnet.subnet.ip_prefix) + subnet.subnet.ip_prefixed)
+                        if ip_address not in cidr_obj:
+                            raise vnc_exc.HttpError(status_code=409)
                         obj.set_instance_ip_address(ip_address)
-
+                else:
+                    for ipams in vn_obj.get_network_ipam_refs():
+                        for subnet in ipams['attr'].get_ipam_subnets():
+                            if subnet.subnet_uuid == obj.subnet_uuid:
+                                break
+                    subnet_cidr = '%s/%s' % (
+                        subnet.subnet.ip_prefix, subnet.subnet.ip_prefix_len)
+                    if netaddr.IPAddress(obj.get_instance_ip_address()) not in \
+                        netaddr.IPNetwork(subnet_cidr):
+                        rc = MockVnc.DeleteCallables(
+                            self._resource_type,
+                            self._resource,
+                            self._resource_collection,
+                            self._server_conn)
+                        rc(id=uuid)
+                        raise vnc_exc.HttpError(status_code=400, content="")
             elif self._resource_type == 'security-group':
                 if not obj.get_id_perms():
                     obj.set_id_perms(vnc_api.IdPermsType(enable=True))
@@ -314,6 +341,8 @@ class MockVnc(object):
 
             for ref in obj.backref_fields:
                 if getattr(obj, "get_" + ref)():
+                    print " -- Cannot delete %s resource as it still has %s refs %s" % (
+                        self._resource_type, ref, getattr(obj, "get_" + ref)())
                     raise vnc_exc.RefsExistError()
 
             self._resource.pop(obj.uuid)
