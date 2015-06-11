@@ -222,8 +222,7 @@ class VNetworkUpdateHandler(res_handler.ResourceUpdateHandler, VNetworkMixin):
         if is_shared and not vn_obj.is_shared:
             for vmi in vn_obj.get_virtual_machine_interface_back_refs() or []:
                 vmi_obj = vmi_handler.VMInterfaceHandler(
-                    self._vnc_lib)._resource_get(
-                    id=vmi['uuid'])
+                    self._vnc_lib).get_vmi_obj(vmi['uuid'])
                 if vmi_obj.parent_type == 'project' and (
                    vmi_obj.parent_uuid != vn_obj.parent_uuid):
                     self._raise_contrail_exception(

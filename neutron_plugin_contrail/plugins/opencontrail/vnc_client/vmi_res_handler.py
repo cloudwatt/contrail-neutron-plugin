@@ -906,6 +906,9 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
 
         return ret_ports
 
+    def get_vmi_obj(self, vmi_id, fields=None):
+        return self._resource_get(id=vmi_id, fields=fields)
+        
     def resource_get(self, context, port_id, fields=None):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)

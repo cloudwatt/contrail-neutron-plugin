@@ -34,7 +34,7 @@ class FloatingIpMixin(object):
             self._vnc_lib)
         port_id = fip_q.get('port_id')
         if port_id:
-            vmi_obj = vmi_get_handler._resource_get(id=port_id)
+            vmi_obj = vmi_get_handler.get_vmi_obj(port_id)
 
             if not is_admin:
                 vmi_tenant_id = vmi_get_handler.get_vmi_tenant_id(vmi_obj)
@@ -55,9 +55,8 @@ class FloatingIpMixin(object):
             if not vmi_refs:
                 fip_obj.set_floating_ip_fixed_ip_address(None)
             else:
-                vmi_obj = vmi_get_handler._resource_get(
-                    back_refs=False, id=vmi_refs[0]['uuid'],
-                    fields=['instance_ip_back_refs'])
+                vmi_obj = vmi_get_handler.get_vmi_obj(
+                    vmi_refs[0]['uuid'], fields=['instance_ip_back_refs'])
 
                 iip_refs = vmi_obj.get_instance_ip_back_refs()
                 if iip_refs:
@@ -84,7 +83,7 @@ class FloatingIpMixin(object):
         vmi_refs = fip_obj.get_virtual_machine_interface_refs()
         for vmi_ref in vmi_refs or []:
             try:
-                vmi_obj = vmi_get_handler._resource_get(id=vmi_ref['uuid'])
+                vmi_obj = vmi_get_handler.get_vmi_obj(vmi_ref['uuid'])
                 port_id = vmi_ref['uuid']
                 break
             except vnc_exc.NoIdError:

@@ -575,7 +575,7 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
                       'name': ''}
             port = self._vmi_handler.resource_create(context=context,
                                                      port_q=port_q)
-            vmi_obj = self._vmi_handler._resource_get(id=port['id'])
+            vmi_obj = self._vmi_handler.get_vmi_obj(port['id'])
 
         return vmi_obj, vn_obj, subnet_id
 
@@ -602,7 +602,7 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
         self._vnc_lib.virtual_network_update(vn_obj)
 
     def _get_vmi_info(self, port_id):
-        vmi_obj = self._vmi_handler._resource_get(id=port_id)
+        vmi_obj = self._vmi_handler.get_vmi_obj(port_id)
         net_id = self._vmi_handler.get_vmi_net_id(vmi_obj)
         port_req_memo = {'virtual-machines': {},
                          'instance-ips': {},

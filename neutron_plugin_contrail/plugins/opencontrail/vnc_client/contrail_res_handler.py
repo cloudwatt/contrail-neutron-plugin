@@ -127,7 +127,7 @@ class ResourceGetHandler(ContrailResourceHandler):
     resource_get_method = None
     detail = True
 
-    def _resource_list(self, back_refs=True, **kwargs):
+    def _resource_list(self, back_refs=False, **kwargs):
         if back_refs:
             kwargs['fields'] = list(set((kwargs.get('fields', [])) +
                                         (self.back_ref_fields or [])))
@@ -136,7 +136,7 @@ class ResourceGetHandler(ContrailResourceHandler):
 
         return getattr(self._vnc_lib, self.resource_list_method)(**kwargs)
 
-    def _resource_get(self, resource_get_method=None, back_refs=True,
+    def _resource_get(self, resource_get_method=None, back_refs=False,
                       **kwargs):
         if back_refs:
             kwargs['fields'] = list(set((kwargs.get('fields', [])) +
