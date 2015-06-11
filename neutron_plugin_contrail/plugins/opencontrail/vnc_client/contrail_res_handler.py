@@ -247,6 +247,12 @@ class InstanceIpHandler(ResourceGetHandler, ResourceCreateHandler,
                        self._resource_list(back_ref_id=[net_id])]
         return ip_addr in net_ip_list
 
+    def get_iip_obj(self, id):
+        return _resource_get(id=id)
+
+    def get_iip_obj_list(self, **kwargs):
+        return self._resource_list(**kwargs)
+
     def create_instance_ip(self, vn_obj, vmi_obj, ip_addr=None,
                            subnet_uuid=None, ip_family='v4'):
         ip_name = str(uuid.uuid4())

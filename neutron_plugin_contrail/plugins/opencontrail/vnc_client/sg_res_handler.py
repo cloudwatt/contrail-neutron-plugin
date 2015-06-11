@@ -133,6 +133,9 @@ class SecurityGroupBaseGet(res_handler.ResourceGetHandler):
 class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
     resource_list_method = "security_groups_list"
 
+    def get_sg_obj(self, id=None, fq_name_str=None):
+        return self._resource_get(id=id, fq_name_str=fq_name_str)
+
     def resource_get(self, context, sg_id, fields=None):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)

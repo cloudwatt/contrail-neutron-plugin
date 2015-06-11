@@ -32,7 +32,7 @@ class SecurityGroupRuleMixin(object):
         if not sg_obj:
             try:
                 sg_obj = sg_handler.SecurityGroupHandler(
-                    self._vnc_lib)._resource_get(id=sg_id)
+                    self._vnc_lib).get_sg_obj(id=sg_id)
             except vnc_exc.NoIdError:
                 self._raise_contrail_exception(
                     'SecurityGroupNotFound',
@@ -63,7 +63,7 @@ class SecurityGroupRuleMixin(object):
                 try:
                     if remote_sg != ':'.join(sg_obj.get_fq_name()):
                         remote_sg_obj = sg_handler.SecurityGroupHandler(
-                            self._vnc_lib)._resource_get(fq_name_str=remote_sg)
+                            self._vnc_lib).get_sg_obj(fq_name_str=remote_sg)
                     else:
                         remote_sg_obj = sg_obj
                     remote_sg_uuid = remote_sg_obj.uuid
@@ -294,7 +294,7 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
         elif sgr_q['remote_group_id']:
             try:
                 sg_obj = sg_handler.SecurityGroupHandler(
-                    self._vnc_lib)._resource_get(id=sgr_q['remote_group_id'])
+                    self._vnc_lib).get_sg_obj(id=sgr_q['remote_group_id'])
             except vnc_exc.NoIdError:
                 self._raise_contrail_exception('SecurityGroupNotFound',
                                                 id=sgr_q['remote_group_id'],
@@ -339,7 +339,7 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
     def _security_group_rule_create(self, sg_id, sg_rule, project_id):
         sghandler = sg_handler.SecurityGroupHandler(self._vnc_lib)
         try:
-            sg_vnc = sghandler._resource_get(id=sg_id)
+            sg_vnc = sghandler.get_sg_obj(id=sg_id)
         except vnc_exc.NoIdError:
             self._raise_contrail_exception('SecurityGroupNotFound', id=sg_id,
                                            resource='security_group')

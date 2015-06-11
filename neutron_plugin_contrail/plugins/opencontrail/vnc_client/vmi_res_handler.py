@@ -407,7 +407,7 @@ class VMInterfaceMixin(object):
             ip_handler = res_handler.InstanceIpHandler(self._vnc_lib)
             for ip_back_ref in ip_back_refs:
                 try:
-                    ip_obj = ip_handler._resource_get(id=ip_back_ref['uuid'])
+                    ip_obj = ip_handler.get_iip_obj(id=ip_back_ref['uuid'])
                 except vnc_exc.NoIdError:
                     continue
             vmi_obj_ips.append(ip_obj.get_instance_ip_address())
@@ -428,9 +428,13 @@ class VMInterfaceMixin(object):
 
     def _neutron_port_to_vmi(self, port_q, vmi_obj=None):
         update = False
+        fields=None
         if not vmi_obj:
             try:
-                vmi_obj = self._resource_get(id=port_q.get('id'))
+                if 'fixed_ips' in port_q:
+                    fields=['instance_ip_back_refs']
+                vmi_obj = self._resource_get(id=port_q.get('id'),
+                                             fields=fields)
                 update = True
             except vnc_exc.NoIdError:
                 raise self._raise_contrail_exception(
@@ -485,7 +489,7 @@ class VMInterfaceMixin(object):
         stale_ip_ids = {}
         ip_handler = res_handler.InstanceIpHandler(self._vnc_lib)
         for iip in getattr(vmi_obj, 'instance_ip_back_refs', []):
-            iip_obj = ip_handler._resource_get(id=iip['uuid'])
+            iip_obj = ip_handler.get_iip_obj(id=iip['uuid'])
             ip_addr = iip_obj.get_instance_ip_address()
             stale_ip_ids[ip_addr] = iip['uuid']
 
@@ -523,7 +527,7 @@ class VMInterfaceMixin(object):
         if vmi_obj.parent_type != "project":
             net_id = vmi_obj.get_virtual_network_refs()[0]['uuid']
             vn_get_handler = vn_handler.VNetworkGetHandler(self._vnc_lib)
-            vn_obj = vn_get_handler._resource_get(id=net_id)
+            vn_obj = vn_get_handler.get_vn_obj(id=net_id)
             return vn_get_handler.get_vn_tenant_id(vn_obj)
 
         return self._project_id_vnc_to_neutron(vmi_obj.parent_uuid)
@@ -653,7 +657,8 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
             self._raise_contrail_exception(
                 'IpAddressGenerationFailure', net_id=net_id, resource='port')
         # TODO() below reads back default parent name, fix it
-        vmi_obj = self._resource_get(id=port_id)
+        vmi_obj = self._resource_get(id=port_id,
+                                     fields=['instance_ip_back_refs'])
         ret_port_q = self._vmi_to_neutron_port(vmi_obj)
 
         # create interface route table for the port if
@@ -686,10 +691,10 @@ class VMInterfaceUpdateHandler(res_handler.ResourceUpdateHandler,
         except vnc_exc.HttpError:
             self._raise_contrail_exception(
                 'IpAddressGenerationFailure', net_id=net_id, resource='port')
-        vn_obj = self._resource_get(id=port_id)
-        extensions_enabled = port_q.get('contrail_extension_enabled', True)
+        vmi_obj = self._resource_get(id=port_id,
+                                     fields=['instance_ip_back_refs'])
         ret_port_q = self._vmi_to_neutron_port(
-            vmi_obj, extensions_enabled=extensions_enabled)
+            vmi_obj, extensions_enabled=contrail_extensions_enabled)
 
         return ret_port_q
 
@@ -700,7 +705,7 @@ class VMInterfaceDeleteHandler(res_handler.ResourceDeleteHandler,
 
     def resource_delete(self, context, port_id):
         try:
-            vmi_obj = self._resource_get(id=port_id)
+            vmi_obj = self._resource_get(back_refs=True, id=port_id)
         except vnc_exc.NoIdError:
             raise self._raise_contrail_exception(
                 "PortNotFound", port_id=port_id, resource='port')
@@ -725,7 +730,7 @@ class VMInterfaceDeleteHandler(res_handler.ResourceDeleteHandler,
 
         for iip_back_ref in iip_back_refs or []:
             # if name contains IP address then this is shared ip
-            iip_obj = ip_handler._resource_get(id=iip_back_ref['uuid'])
+            iip_obj = ip_handler.get_iip_obj(id=iip_back_ref['uuid'])
 
             # in case of shared ip only delete the link to the VMI
             iip_obj.del_virtual_machine_interface(vmi_obj)
@@ -770,7 +775,7 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
                            device_ids=None, vmi_uuids=None, vn_ids=None):
         vn_list_handler = vn_handler.VNetworkGetHandler(self._vnc_lib)
         pool =  eventlet.GreenPool()
-        vn_objs_t = pool.spawn(vn_list_handler._resource_list,
+        vn_objs_t = pool.spawn(vn_list_handler.get_vn_obj_list,
                                parent_id=project_ids, detail=True)
 
         vmi_objs_t = None
@@ -797,8 +802,8 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
         # with only one call
         if context['is_admin']:
             iip_list_handler = res_handler.InstanceIpHandler(self._vnc_lib)
-            iip_objs_t = pool.spawn(iip_list_handler._resource_list,
-                                           detail=True)
+            iip_objs_t = pool.spawn(iip_list_handler.get_iip_obj_list,
+                                    detail=True)
 
         pool.waitall()
 
@@ -808,8 +813,8 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
         else:
             vn_ids = [vn_obj.uuid for vn_obj in vn_objs]
             iip_list_handler = res_handler.InstanceIpHandler(self._vnc_lib)
-            iips_objs = iip_list_handler._resource_list(back_ref_id=vn_ids,
-                                                        detail=True)
+            iips_objs = iip_list_handler.get_iip_obj_list(back_ref_id=vn_ids,
+                                                          detail=True)
 
         vmi_objs = []
         if vmi_objs_t is not None:
@@ -848,6 +853,9 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
             ret_ports.append(port_info)
 
         return ret_ports
+
+    def get_vmi_list(self, **kwargs):
+        return self._resource_list(**kwargs)
 
     def resource_list(self, context=None, filters={}, fields=None):
         if not context:
@@ -913,7 +921,8 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
         try:
-            vmi_obj = self._resource_get(id=port_id)
+            vmi_obj = self._resource_get(id=port_id,
+                                         fields=['instance_ip_back_refs'])
         except vnc_exc.NoIdError:
             self._raise_contrail_exception('PortNotFound', port_id=port_id,
                                            resource='port')

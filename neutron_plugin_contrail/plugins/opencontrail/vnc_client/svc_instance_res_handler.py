@@ -33,7 +33,7 @@ class SvcInstanceMixin(object):
         si_props = si_obj.get_service_instance_properties()
         if si_props:
             vn_fq_name = si_props.get_right_virtual_network()
-            vn_obj = vn_handler.VNetworkHandler(self._vnc_lib)._resource_get(
+            vn_obj = vn_handler.VNetworkHandler(self._vnc_lib).get_vn_obj(
                 fq_name_str=vn_fq_name)
             si_q_dict['external_net'] = str(vn_obj.uuid) + ' ' + vn_obj.name
             si_q_dict['internal_net'] = ''
@@ -127,7 +127,7 @@ class SvcInstanceCreateHandler(res_handler.ResourceCreateHandler,
                 resource='svc_instance')
         net_id = si_q['external_net']
         ext_vn = vn_handler.VNetworkHandler(
-            self._vnc_lib)._resource_get(id=net_id)
+            self._vnc_lib).get_vn_obj(id=net_id)
         scale_out = vnc_api.ServiceScaleOutType(
             max_instances=1, auto_scale=False)
         si_prop = vnc_api.ServiceInstanceType(

@@ -176,7 +176,7 @@ class LogicalRouterMixin(object):
         vmi_get_handler = vmi_handler.VMInterfaceGetHandler(self._vnc_lib)
         for intf in router_obj.get_virtual_machine_interface_refs() or []:
             port_id = intf['uuid']
-            vmi_obj = vmi_get_handler._resource_get(id=port_id)
+            vmi_obj = vmi_get_handler.get_vmi_obj(port_id)
             net_id = vmi_get_handler.get_vmi_net_id(vmi_obj)
 
             try:
@@ -389,7 +389,7 @@ class LogicalRouterGetHandler(res_handler.ResourceGetHandler,
         for router_obj in router_list or []:
             for vmi in (router_obj.get_virtual_machine_interface_refs()
                         or []):
-                vmi_obj = vmi_get_handler._resource_get(id=vmi['uuid'])
+                vmi_obj = vmi_get_handler.get_vmi_obj(vmi['uuid'])
                 if (vmi_obj.get_virtual_network_refs()[0]['uuid'] ==
                         port_net_id):
                     return router_obj.uuid
@@ -494,7 +494,7 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
     def _check_for_dup_router_subnet(self, router_id, subnet_id,
                                      subnet_cidr):
         try:
-            router_vmi_objs = self._vmi_handler._resource_list(
+            router_vmi_objs = self._vmi_handler.get_vmi_list(
                 back_ref_id=[router_id])
             # It's possible router ports are on the same network, but
             # different subnets.
@@ -602,7 +602,8 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
         self._vnc_lib.virtual_network_update(vn_obj)
 
     def _get_vmi_info(self, port_id):
-        vmi_obj = self._vmi_handler.get_vmi_obj(port_id)
+        vmi_obj = self._vmi_handler.get_vmi_obj(
+            port_id, fields=['logical_router_back_refs'])
         net_id = self._vmi_handler.get_vmi_net_id(vmi_obj)
         port_req_memo = {'virtual-machines': {},
                          'instance-ips': {},

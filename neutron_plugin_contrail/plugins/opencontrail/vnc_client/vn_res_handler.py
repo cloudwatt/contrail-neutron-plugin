@@ -316,6 +316,12 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
         return ret_list
     # end _network_list_shared
 
+    def get_vn_obj(self, id=None, fq_name_str=None):
+        return self._resource_get(id=id, fq_name_str=fq_name_str)
+
+    def get_vn_obj_list(self, **kwargs):
+        return self._resource_list(**kwargs)
+
     def resource_list(self, context=None, filters=None, fields=None):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
