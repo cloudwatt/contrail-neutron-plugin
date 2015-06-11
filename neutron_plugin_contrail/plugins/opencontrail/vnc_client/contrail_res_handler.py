@@ -248,7 +248,7 @@ class InstanceIpHandler(ResourceGetHandler, ResourceCreateHandler,
         return ip_addr in net_ip_list
 
     def get_iip_obj(self, id):
-        return _resource_get(id=id)
+        return self._resource_get(id=id)
 
     def get_iip_obj_list(self, **kwargs):
         return self._resource_list(**kwargs)
