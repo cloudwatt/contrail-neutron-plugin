@@ -95,7 +95,7 @@ class SubnetMixin(object):
                 # contrail UI/api might have been used to create the subnet,
                 # create key to id mapping now/here.
                 subnet_vnc = self._subnet_read(key)
-                subnet_id = subnet_vnc.subnet_uuid
+                subnet_id = subnet_vnc.subnet.subnet_uuid
                 # persist to avoid this calculation later
                 self._subnet_vnc_create_mapping(subnet_id, key)
             return subnet_id
@@ -439,7 +439,7 @@ class SubnetCreateHandler(res_handler.ResourceCreateHandler, SubnetMixin):
             for subnet in net_ipam_ref['attr'].get_ipam_subnets():
                 if self.subnet_cidr_overlaps(subnet_vnc, subnet):
                     existing_sn_id = self._subnet_vnc_read_mapping(
-                        key=subnet_key)
+                        key=self._subnet_vnc_get_key(subnet, net_id))
                     # duplicate !!
                     msg = ("Cidr %s overlaps with another subnet of subnet %s"
                            ) % (subnet_q['cidr'], existing_sn_id)

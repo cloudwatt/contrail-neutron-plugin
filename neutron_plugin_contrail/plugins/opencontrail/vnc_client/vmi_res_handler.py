@@ -19,6 +19,7 @@ import eventlet
 import netaddr
 from neutron.common import constants as n_constants
 from vnc_api import vnc_api
+from oslo_config import cfg
 
 import contrail_res_handler as res_handler
 import fip_res_handler
@@ -33,10 +34,10 @@ class VMInterfaceMixin(object):
         # check = {'ip_address': ['20.0.0.5', '20.0.0.6']}
         # against = [{'subnet_id': 'uuid', 'ip_address': u'20.0.0.5'}]
 
-        for addr in check['ip_address']:
-            for item in against:
-                if item['ip_address'] == addr:
-                    return True
+        for item in against:
+            if item['ip_address'] in check['ip_address'] and \
+                item['subnet_id'] in check['subnet_id']:
+                return True
 
         return False
 
@@ -426,25 +427,12 @@ class VMInterfaceMixin(object):
                     'IpAddressInUse', net_id=net_id,
                     ip_address=ip_addr, resource='port')
 
-    def _neutron_port_to_vmi(self, port_q, vmi_obj=None):
-        update = False
-        fields=None
-        if not vmi_obj:
-            try:
-                if 'fixed_ips' in port_q:
-                    fields=['instance_ip_back_refs']
-                vmi_obj = self._resource_get(id=port_q.get('id'),
-                                             fields=fields)
-                update = True
-            except vnc_exc.NoIdError:
-                raise self._raise_contrail_exception(
-                    'PortNotFound', port_id=port_q.get('id'),
-                    resource='port')
-
+    def _neutron_port_to_vmi(self, port_q, vmi_obj=None, update=False):
         if 'name' in port_q and port_q['name']:
             vmi_obj.display_name = port_q['name']
 
         device_owner = port_q.get('device_owner')
+
         if (device_owner not in [n_constants.DEVICE_OWNER_ROUTER_INTF,
                                  n_constants.DEVICE_OWNER_ROUTER_GW]
                 and 'device_id' in port_q):
@@ -452,6 +440,11 @@ class VMInterfaceMixin(object):
 
         if device_owner is not None:
             vmi_obj.set_virtual_machine_interface_device_owner(device_owner)
+
+        if ('mac_address' in port_q and port_q['mac_address']):
+            mac_addrs_obj = vnc_api.MacAddressesType()
+            mac_addrs_obj.set_mac_address([port_q['mac_address']])
+            vmi_obj.set_virtual_machine_interface_mac_addresses(mac_addrs_obj)
 
         if 'security_groups' in port_q:
             self._set_vmi_security_groups(vmi_obj,
@@ -486,42 +479,82 @@ class VMInterfaceMixin(object):
         # 2. add new ips on port from update body
         # 3. delete old/stale ips on port
 
+        subnets = dict()
+        ipam_refs = vn_obj.get_network_ipam_refs()
+        for ipam_ref in ipam_refs or []:
+            subnet_vncs = ipam_ref['attr'].get_ipam_subnets()
+            for subnet_vnc in subnet_vncs:
+                cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
+                                  subnet_vnc.subnet.get_ip_prefix_len())
+                subnets[subnet_vnc.subnet_uuid] = cidr
+
+        def get_iip_subnet_uuid(iip_address):
+            for sn_uuid, cidr in subnets.iteritems():
+                if netaddr.IPAddress(iip_address) in netaddr.IPNetwork(cidr):
+                    return sn_uuid
+
         stale_ip_ids = {}
         ip_handler = res_handler.InstanceIpHandler(self._vnc_lib)
         for iip in getattr(vmi_obj, 'instance_ip_back_refs', []):
             iip_obj = ip_handler.get_iip_obj(id=iip['uuid'])
             ip_addr = iip_obj.get_instance_ip_address()
-            stale_ip_ids[ip_addr] = iip['uuid']
-
+            stale_ip_ids[get_iip_subnet_uuid(ip_addr)] = iip['uuid']
 
         created_iip_ids = []
+        new_iip_subnets = []
         for fixed_ip in fixed_ips:
             try:
                 ip_addr = fixed_ip.get('ip_address')
                 if ip_addr is not None:
-                    try:
-                        # this ip survives to next gen
-                        del stale_ip_ids[ip_addr]
-                        continue
-                    except KeyError:
-                        pass
-
                     if netaddr.IPAddress(ip_addr).version == 4:
                         ip_family = "v4"
                     elif netaddr.IPAddress(ip_addr).version == 6:
                         ip_family = "v6"
                 subnet_id = fixed_ip.get('subnet_id')
-                ip_id = ip_handler.create_instance_ip(vn_obj, vmi_obj, ip_addr,
+                if subnet_id and subnet_id not in subnets:
+                    for iip_id in created_iip_ids:
+                        ip_handler._resource_delete(id=iip_id)
+                    self._raise_contrail_exception(
+                        'BadRequest',
+                        msg='Subnet invalid for network')
+
+                ip_family = fixed_ip.get('ip_family', ip_family)
+                ip_obj = ip_handler.create_instance_ip(vn_obj, vmi_obj, ip_addr,
                                                       subnet_id, ip_family)
-                created_iip_ids.append(ip_id)
+                new_iip_subnets.append(get_iip_subnet_uuid(
+                    ip_obj.get_instance_ip_address()))
+
+                created_iip_ids.append(ip_obj.uuid)
             except vnc_exc.HttpError as e:
                 # Resources are not available
                 for iip_id in created_iip_ids:
                     ip_handler._resource_delete(id=iip_id)
-                raise e
+                if e.status_code == 400:
+                    if 'subnet_id' in fixed_ip:
+                        self._raise_contrail_exception(
+                            'InvalidIpForSubnet',
+                            ip_address=fixed_ip.get('ip_address'))
+                    else:
+                        self._raise_contrail_exception(
+                            'InvalidIpForNetwork',
+                            ip_address=fixed_ip.get('ip_address'))
+                else:
+                    self._raise_contrail_exception(
+                        'IpAddressGenerationFailure', net_id=net_id, resource='port')
 
-        for stale_ip, stale_id in stale_ip_ids.items():
-            ip_handler._resource_delete(id=stale_id)
+        iips_total = list(created_iip_ids)
+        for stale_sn_id, stale_id in stale_ip_ids.items():
+            if stale_sn_id in new_iip_subnets or not fixed_ips:
+               ip_handler._resource_delete(id=stale_id)
+            else:
+                iips_total.append(stale_id)
+
+        if len(iips_total) > cfg.CONF.max_fixed_ips_per_port:
+            for iip_id in iips_total:
+                ip_handler._resource_delete(id=iip_id)
+            self._raise_contrail_exception(
+                'BadRequest',
+                msg="IIPS exceeds max limit")
 
     def get_vmi_tenant_id(self, vmi_obj):
         if vmi_obj.parent_type != "project":
@@ -531,6 +564,18 @@ class VMInterfaceMixin(object):
             return vn_get_handler.get_vn_tenant_id(vn_obj)
 
         return self._project_id_vnc_to_neutron(vmi_obj.parent_uuid)
+
+    def _validate_mac_address(self, project_id, net_id, mac_address):
+        ports = self._vnc_lib.virtual_machine_interfaces_list(
+            parent_id=project_id, back_ref_id=net_id, detail=True)
+
+        for port in ports:
+            macs = port.get_virtual_machine_interface_mac_addresses()
+            for mac in macs.get_mac_address():
+                if mac == mac_address:
+                    raise self._raise_contrail_exception(
+                        "MacAddressInUse", net_id=net_id, mac=mac_address,
+                        resource='port')
 
 
 class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
@@ -548,18 +593,6 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
         else:
             tenant_id = context['tenant']
         return tenant_id
-
-    def _validate_mac_address(self, project_id, net_id, mac_address):
-        ports = self._vnc_lib.virtual_machine_interfaces_list(
-            parent_id=project_id, back_ref_id=net_id, detail=True)
-
-        for port in ports:
-            macs = port.get_virtual_machine_interface_mac_addresses()
-            for mac in macs.get_mac_address():
-                if mac == mac_address:
-                    raise self._raise_contrail_exception(
-                        "MacAddressInUse", net_id=net_id, mac=mac_address,
-                        resource='port')
 
     def _create_vmi_obj(self, port_q, vn_obj):
         project_id = self._project_id_neutron_to_vnc(port_q['tenant_id'])
@@ -579,11 +612,6 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
                                                   id_perms=id_perms)
         vmi_obj.uuid = vmi_uuid
         vmi_obj.set_virtual_network(vn_obj)
-        if ('mac_address' in port_q and port_q['mac_address']):
-            mac_addrs_obj = vnc_api.MacAddressesType()
-            mac_addrs_obj.set_mac_address([port_q['mac_address']])
-            vmi_obj.set_virtual_machine_interface_mac_addresses(mac_addrs_obj)
-
         vmi_obj.set_security_group_list([])
         if ('security_groups' not in port_q or
                 port_q['security_groups'].__class__ is object):
@@ -627,16 +655,25 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
         # determine creation of v4 and v6 ip object
         ip_obj_v4_create = False
         ip_obj_v6_create = False
+        fixed_ips = []
         ipam_refs = vn_obj.get_network_ipam_refs() or []
         for ipam_ref in ipam_refs:
             subnet_vncs = ipam_ref['attr'].get_ipam_subnets()
             for subnet_vnc in subnet_vncs:
                 cidr = '%s/%s' % (subnet_vnc.subnet.get_ip_prefix(),
                                   subnet_vnc.subnet.get_ip_prefix_len())
-                if (netaddr.IPNetwork(cidr).version == 4):
+                if not ip_obj_v4_create and (
+                        netaddr.IPNetwork(cidr).version == 4):
                     ip_obj_v4_create = True
-                if (netaddr.IPNetwork(cidr).version == 6):
+                    fixed_ips.append(
+                        {'subnet_id': subnet_vnc.subnet_uuid,
+                         'ip_family': 'v6'})
+                if not ip_obj_v6_create and (
+                        netaddr.IPNetwork(cidr).version == 6):
                     ip_obj_v6_create = True
+                    fixed_ips.append(
+                        {'subnet_id': subnet_vnc.subnet_uuid,
+                         'ip_family': 'v4'})
 
         # create the object
         port_id = self._resource_create(vmi_obj)
@@ -644,18 +681,11 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
             if 'fixed_ips' in port_q:
                 self._create_instance_ips(vn_obj, vmi_obj, port_q['fixed_ips'])
             elif vn_obj.get_network_ipam_refs():
-                fixed_ips = [{'ip_address': None}]
-                if ip_obj_v4_create:
-                    self._create_instance_ips(vn_obj, vmi_obj, fixed_ips,
-                                              ip_family="v4")
-                if ip_obj_v6_create:
-                    self._create_instance_ips(vn_obj, vmi_obj, fixed_ips,
-                                              ip_family="v6")
-        except vnc_exc.HttpError:
+                self._create_instance_ips(vn_obj, vmi_obj, fixed_ips)
+        except Exception as e:
+            self._resource_delete(id=port_id)
+            raise e
             # failure in creating the instance ip. Roll back
-            self._resource_delete(port_id=port_id)
-            self._raise_contrail_exception(
-                'IpAddressGenerationFailure', net_id=net_id, resource='port')
         # TODO() below reads back default parent name, fix it
         vmi_obj = self._resource_get(id=port_id,
                                      fields=['instance_ip_back_refs'])
@@ -680,19 +710,27 @@ class VMInterfaceUpdateHandler(res_handler.ResourceUpdateHandler,
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
         port_q['id'] = port_id
-        vmi_obj = self._neutron_port_to_vmi(port_q)
+        try:
+            vmi_obj = self._resource_get(id=port_q.get('id'))
+        except vnc_exc.NoIdError:
+            raise self._raise_contrail_exception(
+                'PortNotFound', port_id=port_q.get('id'),
+                resource='port')
+
         net_id = vmi_obj.get_virtual_network_refs()[0]['uuid']
         vn_obj = self._vnc_lib.virtual_network_read(id=net_id)
+        if port_q.get('mac_address'):
+            self._validate_mac_address(
+                vmi_obj.parent_uuid,
+                net_id, port_q['mac_address'])
+
+        vmi_obj = self._neutron_port_to_vmi(port_q, vmi_obj=vmi_obj, update=True)
         self._resource_update(vmi_obj)
-        try:
-            if port_q.get('fixed_ips'):
-                self._create_instance_ips(vn_obj, vmi_obj,
-                                          port_q.get('fixed_ips'))
-        except vnc_exc.HttpError:
-            self._raise_contrail_exception(
-                'IpAddressGenerationFailure', net_id=net_id, resource='port')
-        vmi_obj = self._resource_get(id=port_id,
-                                     fields=['instance_ip_back_refs'])
+        if 'fixed_ips' in port_q:
+            self._create_instance_ips(vn_obj, vmi_obj,
+                                      port_q.get('fixed_ips'))
+        vn_obj = self._resource_get(id=port_id)
+        extensions_enabled = port_q.get('contrail_extension_enabled', True)
         ret_port_q = self._vmi_to_neutron_port(
             vmi_obj, extensions_enabled=contrail_extensions_enabled)
 
@@ -725,7 +763,7 @@ class VMInterfaceDeleteHandler(res_handler.ResourceDeleteHandler,
                 resource='port')
 
         # release instance IP address
-        iip_back_refs = getattr(vmi_obj, 'instance_ip_back_refs', None)
+        iip_back_refs = list((getattr(vmi_obj, 'instance_ip_back_refs', None)))
         ip_handler = res_handler.InstanceIpHandler(self._vnc_lib)
 
         for iip_back_ref in iip_back_refs or []:
@@ -738,7 +776,6 @@ class VMInterfaceDeleteHandler(res_handler.ResourceDeleteHandler,
                 ip_handler._resource_delete(id=iip_back_ref['uuid'])
             else:
                 ip_handler._resource_update(iip_obj)
-
         # disassociate any floating IP used by instance
         fip_back_refs = getattr(vmi_obj, 'floating_ip_back_refs', None)
         if fip_back_refs:
@@ -898,8 +935,8 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
 
             # TODO(safchain) revisit these filters if necessary
             if not self._filters_is_present(filters,
-                                                                'name',
-                                                                port['name']):
+                                            'name',
+                                             port['name']):
                 continue
             if not self._filters_is_present(
                     filters, 'device_owner', port['device_owner']):
