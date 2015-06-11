@@ -789,14 +789,14 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
 
         if back_ref_id:
             vmi_objs_t = pool.spawn(self._resource_list,
-                                    back_ref_id=back_ref_id)
+                                    back_ref_id=back_ref_id, back_refs=True)
 
         if vmi_uuids:
             vmi_obj_uuids_t = pool.spawn(self._resource_list,
-                                         obj_uuids=vmi_uuids)
+                                         obj_uuids=vmi_uuids, back_refs=True)
         elif not back_ref_id:
             vmi_objs_t = pool.spawn(self._resource_list,
-                                    parent_id=project_ids)
+                                    parent_id=project_ids, back_refs=True)
 
         # if admin no need to filter we can retrieve all the ips object
         # with only one call
