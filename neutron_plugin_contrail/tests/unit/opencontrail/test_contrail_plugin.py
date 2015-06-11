@@ -41,10 +41,27 @@ from neutron.db import securitygroups_db
 from neutron.extensions import portbindings
 from neutron.extensions import securitygroup as ext_sg
 from neutron.tests.unit import _test_extension_portbindings as test_bindings
-from neutron.tests.unit import test_db_plugin as test_plugin
-from neutron.tests.unit import test_extension_security_group as test_sg
-from neutron.tests.unit import test_extensions
-from neutron.tests.unit import test_l3_plugin
+
+try:
+    from neutron.tests.unit import test_db_plugin as test_plugin
+except ImportError:
+    from neutron.tests.unit.db import test_db_base_plugin_v2 as test_plugin
+
+try:
+    from neutron.tests.unit import test_extension_security_group as test_sg
+except ImportError:
+    from neutron.tests.unit.extensions import test_securitygroup as test_sg
+
+try:
+    from neutron.tests.unit import test_extensions
+except ImportError:
+    from neutron.tests.unit.api import test_extensions
+
+try:
+    from neutron.tests.unit import test_l3_plugin
+except ImportError:
+    from neutron.tests.unit.extensions import test_l3 as test_l3_plugin
+
 
 from vnc_api import vnc_api
 from neutron_plugin_contrail.tests.unit.opencontrail.vnc_mock import MockVnc
