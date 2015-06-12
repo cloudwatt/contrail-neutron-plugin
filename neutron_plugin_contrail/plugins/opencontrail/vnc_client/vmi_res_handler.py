@@ -335,6 +335,10 @@ class VMInterfaceMixin(object):
             except vnc_exc.RefsExistError as e:
                 self._raise_contrail_exception(
                     'BadRequest', resource='port', msg=str(e))
+            except vnc_exc.NoIdError:
+                self._raise_contrail_exception(
+                    'DeviceIDNotOwnedByTenant', resource='port',
+                    device_id=instance_name)
         else:
             vmi_obj.set_virtual_machine_list([])
 

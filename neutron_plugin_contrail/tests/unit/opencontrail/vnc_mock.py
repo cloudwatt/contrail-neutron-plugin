@@ -152,6 +152,12 @@ class MockVnc(object):
             return ret
 
     class CreateCallables(Callables):
+        def _check_if_uuid_in_use(self, uuid_value):
+            for res_dict in self._resource_collection.itervalues():
+                if res_dict.has_key(uuid_value):
+                    return True
+            return False
+
         def _mock_add_network_ipam(self, obj):
             actual = obj.add_network_ipam
             def _mock(obj, vnsn_data):
@@ -178,7 +184,9 @@ class MockVnc(object):
             obj._server_conn = self._server_conn
             if not uuid:
                 uuid = obj.uuid = str(UUID.uuid4())
-
+            else:
+                if self._check_if_uuid_in_use(uuid):
+                    raise vnc_exc.RefsExistError('')
             if hasattr(obj, 'parent_type'):
                 if obj.parent_type == 'project':
                     parent = self._server_conn.project_read(
