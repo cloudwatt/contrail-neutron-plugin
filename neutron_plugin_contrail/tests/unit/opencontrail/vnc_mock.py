@@ -95,7 +95,14 @@ class MockVnc(object):
                                ':'.join(kwargs['fq_name']))
                 if fq_name_str in self._resource:
                     return self._resource[fq_name_str]
-
+            if self._resource_type == 'service-template':
+                if 'fq_name' in kwargs and (
+                    kwargs['fq_name'] == ['default-domain',
+                                          'netns-snat-template']):
+                    fq_name_str = ':'.join(kwargs['fq_name'])
+                    self._resource[fq_name_str] = vnc_api.ServiceTemplate(
+                        fq_name=kwargs['fq_name'])
+                    return self._resource[fq_name_str]
             # Not found yet
             raise vnc_exc.NoIdError(
                 kwargs['id'] if 'id' in kwargs else fq_name_str)
@@ -334,6 +341,20 @@ class MockVnc(object):
                                              self._resource_type, cur_obj)
 
     class DeleteCallables(Callables):
+        _refs_excluded_resources = {}
+        _refs_excluded_resources['service-instance'] = (
+            ['logical_router_back_refs'])
+        _refs_excluded_resources['virtual-machine-interface'] = (
+            ['floating_ip_back_refs'])
+
+        def _backref_excluded(self, resource, back_refs):
+            excluded_list = self._refs_excluded_resources.get(
+                resource)
+            if excluded_list:
+                if back_refs in excluded_list:
+                    return True
+            return False
+            
         def __call__(self, **kwargs):
             obj = None
             if 'fq_name' in kwargs and kwargs['fq_name']:
@@ -349,9 +370,10 @@ class MockVnc(object):
 
             for ref in obj.backref_fields:
                 if getattr(obj, "get_" + ref)():
-                    print " -- Cannot delete %s resource as it still has %s refs %s" % (
-                        self._resource_type, ref, getattr(obj, "get_" + ref)())
-                    raise vnc_exc.RefsExistError()
+                    if not self._backref_excluded(self._resource_type, ref):
+                        print " -- Cannot delete %s resource as it still has %s refs %s" % (
+                            self._resource_type, ref, getattr(obj, "get_" + ref)())
+                        raise vnc_exc.RefsExistError()
 
             self._resource.pop(obj.uuid)
             self._resource.pop(':'.join(obj.get_fq_name()), None)

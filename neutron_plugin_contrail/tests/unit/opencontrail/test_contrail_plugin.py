@@ -317,3 +317,64 @@ class TestContrailL3NatTestCase(JVContrailPluginTestCase,
 
     def setUp(self):
         super(TestContrailL3NatTestCase, self).setUp()
+
+    def test_router_update_gateway_with_existed_floatingip(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_router_update_gateway_to_empty_with_existed_floatingip(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_two_fips_one_port_invalid_return_409(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_router_add_gateway_dup_subnet1_returns_400(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_router_add_interface_dup_subnet2_returns_400(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_router_add_interface_overlapped_cidr_returns_400(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_floatingip_with_invalid_create_port(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_floatingip_list_with_pagination_reverse(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_floatingip_delete_router_intf_with_subnet_id_returns_409(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_floatingip_delete_router_intf_with_port_id_returns_409(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_create_floatingip_no_ext_gateway_return_404(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_create_router_port_with_device_id_of_other_teants_router(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_router_delete_subnet_inuse_returns_409(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_network_update_external_failure(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_router_add_interface_ipv6_subnet_without_gateway_ip(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_router_add_gateway_no_subnet_returns_400(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_floatingip_list_with_pagination(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_router_add_gateway_dup_subnet2_returns_400(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_floatingip_with_assoc_fails(self):
+        self.skipTest("Feature needs to be implemented")
+
+    def test_floating_ip_direct_port_delete_returns_409(self):
+        self.skipTest("Feature needs to be implemented")
+
