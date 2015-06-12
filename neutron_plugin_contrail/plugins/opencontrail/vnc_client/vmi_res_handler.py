@@ -19,7 +19,10 @@ import eventlet
 import netaddr
 from neutron.common import constants as n_constants
 from vnc_api import vnc_api
-from oslo_config import cfg
+try:
+    from oslo.config import cfg
+except ImportError:
+    from oslo_config import cfg
 
 import contrail_res_handler as res_handler
 import fip_res_handler
