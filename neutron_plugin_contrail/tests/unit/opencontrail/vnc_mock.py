@@ -346,6 +346,8 @@ class MockVnc(object):
             ['logical_router_back_refs'])
         _refs_excluded_resources['virtual-machine-interface'] = (
             ['floating_ip_back_refs'])
+        _refs_excluded_resources['security-group'] = (
+            ['virtual_machine_interface_back_refs'])
 
         def _backref_excluded(self, resource, back_refs):
             excluded_list = self._refs_excluded_resources.get(

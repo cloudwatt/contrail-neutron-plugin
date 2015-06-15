@@ -603,7 +603,8 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
 
     def _get_vmi_info(self, port_id):
         vmi_obj = self._vmi_handler.get_vmi_obj(
-            port_id, fields=['logical_router_back_refs'])
+            port_id, fields=['logical_router_back_refs',
+                             'instance_ip_back_refs'])
         net_id = self._vmi_handler.get_vmi_net_id(vmi_obj)
         port_req_memo = {'virtual-machines': {},
                          'instance-ips': {},

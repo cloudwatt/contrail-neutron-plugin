@@ -547,7 +547,8 @@ class VMInterfaceMixin(object):
                             ip_address=fixed_ip.get('ip_address'))
                 else:
                     self._raise_contrail_exception(
-                        'IpAddressGenerationFailure', net_id=net_id, resource='port')
+                        'IpAddressGenerationFailure', net_id=net_id,
+                        resource='port')
 
         iips_total = list(created_iip_ids)
         for stale_sn_id, stale_id in stale_ip_ids.items():
@@ -770,7 +771,7 @@ class VMInterfaceDeleteHandler(res_handler.ResourceDeleteHandler,
                 resource='port')
 
         # release instance IP address
-        iip_back_refs = list((getattr(vmi_obj, 'instance_ip_back_refs', None)))
+        iip_back_refs = list((getattr(vmi_obj, 'instance_ip_back_refs', [])))
         ip_handler = res_handler.InstanceIpHandler(self._vnc_lib)
 
         for iip_back_ref in iip_back_refs or []:
