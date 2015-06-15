@@ -547,8 +547,8 @@ class VMInterfaceMixin(object):
                             ip_address=fixed_ip.get('ip_address'))
                 else:
                     self._raise_contrail_exception(
-                        'IpAddressGenerationFailure', net_id=net_id,
-                        resource='port')
+                        'IpAddressGenerationFailure',
+                        net_id=vn_obj.get_uuid(), resource='port')
 
         iips_total = list(created_iip_ids)
         for stale_sn_id, stale_id in stale_ip_ids.items():
@@ -961,7 +961,7 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
 
     def get_vmi_obj(self, vmi_id, fields=None):
         return self._resource_get(id=vmi_id, fields=fields)
-        
+
     def resource_get(self, context, port_id, fields=None):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)

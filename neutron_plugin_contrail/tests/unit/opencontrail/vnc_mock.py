@@ -262,13 +262,21 @@ class MockVnc(object):
                             subnet.subnet.ip_prefix, subnet.subnet.ip_prefix_len)
                         cidr_obj = netaddr.IPNetwork(subnet_cidr)
                         if not hasattr(subnet.subnet, 'ip_prefixed'):
-                            setattr(subnet.subnet, "ip_prefixed", 2)
+                            setattr(subnet.subnet, "ip_prefixed", 0)
+                        if (netaddr.IPAddress(subnet.default_gateway).words[-1] == subnet.subnet.ip_prefixed + 1):
+                            subnet.subnet.ip_prefixed += 2
                         else:
                             subnet.subnet.ip_prefixed += 1
                         ip_address = str(netaddr.IPAddress(
                             subnet.subnet.ip_prefix) + subnet.subnet.ip_prefixed)
                         if ip_address not in cidr_obj:
-                            raise vnc_exc.HttpError(status_code=409)
+                            rc = MockVnc.DeleteCallables(
+                                self._resource_type,
+                                self._resource,
+                                self._resource_collection,
+                                self._server_conn)
+                            rc(id=uuid)
+                            raise vnc_exc.HttpError(status_code=409, content='')
                         obj.set_instance_ip_address(ip_address)
                 else:
                     for ipams in vn_obj.get_network_ipam_refs():
