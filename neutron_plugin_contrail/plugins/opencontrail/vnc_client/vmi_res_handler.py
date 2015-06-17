@@ -496,7 +496,7 @@ class VMInterfaceMixin(object):
                 subnets[subnet_vnc.subnet_uuid] = cidr
 
         def get_iip_subnet_uuid(iip_address):
-            for sn_uuid, cidr in subnets.iteritems():
+            for sn_uuid, cidr in subnets.items():
                 if netaddr.IPAddress(iip_address) in netaddr.IPNetwork(cidr):
                     return sn_uuid
 
@@ -526,12 +526,15 @@ class VMInterfaceMixin(object):
                         msg='Subnet invalid for network')
 
                 ip_family = fixed_ip.get('ip_family', ip_family)
-                ip_obj = ip_handler.create_instance_ip(vn_obj, vmi_obj, ip_addr,
+                ip_id = ip_handler.create_instance_ip(vn_obj, vmi_obj, ip_addr,
                                                       subnet_id, ip_family)
-                new_iip_subnets.append(get_iip_subnet_uuid(
-                    ip_obj.get_instance_ip_address()))
+                created_iip_ids.append(ip_id)
+                if stale_ip_ids:
+                    ip_obj = ip_handler.get_iip_obj(ip_id)
+                    new_iip_subnets.append(get_iip_subnet_uuid(
+                        ip_obj.get_instance_ip_address()))
 
-                created_iip_ids.append(ip_obj.uuid)
+                
             except vnc_exc.HttpError as e:
                 # Resources are not available
                 for iip_id in created_iip_ids:
@@ -553,13 +556,13 @@ class VMInterfaceMixin(object):
         iips_total = list(created_iip_ids)
         for stale_sn_id, stale_id in stale_ip_ids.items():
             if stale_sn_id in new_iip_subnets or not fixed_ips:
-               ip_handler._resource_delete(id=stale_id)
+               ip_handler.delete_iip_obj(stale_id)
             else:
                 iips_total.append(stale_id)
 
         if len(iips_total) > cfg.CONF.max_fixed_ips_per_port:
             for iip_id in iips_total:
-                ip_handler._resource_delete(id=iip_id)
+                ip_handler.delete_iip_obj(iip_id)
             self._raise_contrail_exception(
                 'BadRequest',
                 msg="IIPS exceeds max limit")
