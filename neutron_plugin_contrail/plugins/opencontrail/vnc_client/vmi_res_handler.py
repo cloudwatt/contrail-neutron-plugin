@@ -675,13 +675,13 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
                     ip_obj_v4_create = True
                     fixed_ips.append(
                         {'subnet_id': subnet_vnc.subnet_uuid,
-                         'ip_family': 'v6'})
+                         'ip_family': 'v4'})
                 if not ip_obj_v6_create and (
                         netaddr.IPNetwork(cidr).version == 6):
                     ip_obj_v6_create = True
                     fixed_ips.append(
                         {'subnet_id': subnet_vnc.subnet_uuid,
-                         'ip_family': 'v4'})
+                         'ip_family': 'v6'})
 
         # create the object
         port_id = self._resource_create(vmi_obj)
@@ -692,7 +692,8 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
                 self._create_instance_ips(vn_obj, vmi_obj, fixed_ips)
         except Exception as e:
             self._resource_delete(id=port_id)
-            raise e
+            self._raise_contrail_exception(
+                    'BadRequest', resource='port', msg=str(e))
             # failure in creating the instance ip. Roll back
         # TODO() below reads back default parent name, fix it
         vmi_obj = self._resource_get(id=port_id,
