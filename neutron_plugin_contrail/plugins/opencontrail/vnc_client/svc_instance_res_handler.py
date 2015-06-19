@@ -1,4 +1,4 @@
-#    Copyright
+# Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,13 +12,18 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import uuid
-
 from cfgm_common import exceptions as vnc_exc
 from vnc_api import vnc_api
 
 import contrail_res_handler as res_handler
 import vn_res_handler as vn_handler
+
+try:
+    from neutron.openstack.common import log as logging
+except ImportError:
+    from oslo_log import log as logging
+
+LOG = logging.getLogger(__name__)
 
 
 class SvcInstanceMixin(object):
@@ -52,7 +57,7 @@ class SvcInstanceGetHandler(res_handler.ResourceGetHandler,
         try:
             si_obj = self._resource_get(id=si_id)
         except vnc_exc.NoIdError:
-            # TODO add svc instance specific exception
+            # TODO() add svc instance specific exception
             self._raise_contrail_exception(
                 'NetworkNotFound', net_id=si_id, resource='svc_instance')
 
@@ -62,7 +67,7 @@ class SvcInstanceGetHandler(res_handler.ResourceGetHandler,
         try:
             project_uuid = self._project_id_neutron_to_vnc(project_id)
         except Exception:
-            print "Error in converting uuid %s" % (project_id)
+            LOG.error("Error in converting uuid %s" % (project_id))
 
         resp_dict = self._resource_list(parent_id=project_uuid)
 
@@ -93,7 +98,7 @@ class SvcInstanceGetHandler(res_handler.ResourceGetHandler,
         # prune phase
         for project_sis in all_sis:
             for proj_si in project_sis:
-                # TODO implement same for name specified in filter
+                # TODO() implement same for name specified in filter
                 proj_si_id = proj_si['uuid']
                 if not self._filters_is_present(filters, 'id', proj_si_id):
                     continue

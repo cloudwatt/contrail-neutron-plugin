@@ -1,4 +1,4 @@
-#    Copyright
+# Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -31,7 +31,8 @@ class SecurityGroupMixin(object):
 
         # replace field names
         sg_q_dict['id'] = sg_obj.uuid
-        sg_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(sg_obj.parent_uuid)
+        sg_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
+            sg_obj.parent_uuid)
         if not sg_obj.display_name:
             # for security groups created directly via vnc_api
             sg_q_dict['name'] = sg_obj.get_fq_name()[-1]
@@ -52,7 +53,7 @@ class SecurityGroupMixin(object):
             sg_q_dict.update(extra_dict)
 
         if fields:
-            sg_q_dict = self._filter_res_dict(sg_q_dict, fields)        
+            sg_q_dict = self._filter_res_dict(sg_q_dict, fields)
         return sg_q_dict
     # end _security_group_vnc_to_neutron
 
@@ -252,7 +253,7 @@ class SecurityGroupUpdateHandler(res_handler.ResourceUpdateHandler,
                 sg_q,
                 self._resource_get(id=sg_id))
         except vnc_exc.NoIdError:
-            selfc._raise_contrail_exception(
+            self._raise_contrail_exception(
                 'SecurityGroupNotFound', id=sg_id, resource='security_group')
 
         self._resource_update(sg_obj)

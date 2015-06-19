@@ -1,4 +1,4 @@
-#    Copyright
+# Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,18 +12,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import uuid
-
 from cfgm_common import exceptions as vnc_exc
+import contrail_res_handler as res_handler
 import netaddr
 from neutron.common import constants as n_constants
 from neutron.common import exceptions as n_exceptions
-from vnc_api import vnc_api
-
-
-import contrail_res_handler as res_handler
 import subnet_res_handler as subnet_handler
 import vmi_res_handler as vmi_handler
+from vnc_api import vnc_api
 
 SNAT_SERVICE_TEMPLATE_FQ_NAME = ['default-domain', 'netns-snat-template']
 
@@ -58,7 +54,8 @@ class LogicalRouterMixin(object):
             rtr_q_dict['name'] = rtr_obj.get_fq_name()[-1]
         else:
             rtr_q_dict['name'] = rtr_obj.display_name
-        rtr_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(rtr_obj.parent_uuid)
+        rtr_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
+            rtr_obj.parent_uuid)
         rtr_q_dict['admin_state_up'] = rtr_obj.get_id_perms().enable
         rtr_q_dict['shared'] = False
         rtr_q_dict['status'] = n_constants.NET_STATUS_ACTIVE
@@ -104,136 +101,12 @@ class LogicalRouterMixin(object):
                 self._router_clear_external_gateway(rtr_obj)
 
     def _router_set_external_gateway(self, router_obj, ext_net_obj):
-        project_obj = self._project_read(proj_id=router_obj.parent_uuid)
-
-        # Get netns SNAT service template
-        try:
-            st_obj = self._vnc_lib.service_template_read(
-                fq_name=SNAT_SERVICE_TEMPLATE_FQ_NAME)
-        except vnc_exc.NoIdError:
-            self._raise_contrail_exception(
-                'BadRequest', resource='router',
-                msg="Unable to set or clear the default gateway")
-
-        # Get the service instance if it exists
-        si_name = 'si_' + router_obj.uuid
-        si_fq_name = project_obj.get_fq_name() + [si_name]
-        try:
-            si_obj = self._vnc_lib.service_instance_read(fq_name=si_fq_name)
-        except vnc_exc.NoIdError:
-            si_obj = None
-
-        # Get route table for default route it it exists
-        rt_name = 'rt_' + router_obj.uuid
-        rt_fq_name = project_obj.get_fq_name() + [rt_name]
-        try:
-            rt_obj = self._vnc_lib.route_table_read(fq_name=rt_fq_name)
-        except vnc_exc.NoIdError:
-            rt_obj = None
-
-        # Set the service instance
-        si_created = False
-        if not si_obj:
-            si_obj = vnc_api.ServiceInstance(si_name, parent_obj=project_obj)
-            si_created = True
-
-        si_prop_obj = vnc_api.ServiceInstanceType(
-            scale_out=vnc_api.ServiceScaleOutType(max_instances=2,
-                                                  auto_scale=True),
-            auto_policy=True)
-
-        # set right interface in order of [right, left] to match template
-        left_if = vnc_api.ServiceInstanceInterfaceType()
-        right_if = vnc_api.ServiceInstanceInterfaceType(
-            virtual_network=ext_net_obj.get_fq_name_str())
-        si_prop_obj.set_interface_list([right_if, left_if])
-        si_prop_obj.set_ha_mode('active-standby')
-
-        si_obj.set_service_instance_properties(si_prop_obj)
-        si_obj.set_service_template(st_obj)
-        if si_created:
-            self._vnc_lib.service_instance_create(si_obj)
-        else:
-            self._vnc_lib.service_instance_update(si_obj)
-
-        # Set the route table
-        route_obj = vnc_api.RouteType(prefix="0.0.0.0/0",
-                                      next_hop=si_obj.get_fq_name_str())
-        rt_created = False
-        if not rt_obj:
-            rt_obj = vnc_api.RouteTable(name=rt_name, parent_obj=project_obj)
-            rt_created = True
-
-        rt_obj.set_routes(vnc_api.RouteTableType.factory([route_obj]))
-
-        if rt_created:
-            self._vnc_lib.route_table_create(rt_obj)
-        else:
-            self._vnc_lib.route_table_update(rt_obj)
-
-        # Associate route table to all private networks connected onto
-        # that router
-        vmi_get_handler = vmi_handler.VMInterfaceGetHandler(self._vnc_lib)
-        for intf in router_obj.get_virtual_machine_interface_refs() or []:
-            port_id = intf['uuid']
-            vmi_obj = vmi_get_handler.get_vmi_obj(port_id)
-            net_id = vmi_get_handler.get_vmi_net_id(vmi_obj)
-
-            try:
-                vn_obj = self._vnc_lib.virtual_network_read(id=net_id)
-            except vnc_exc.NoIdError:
-                self._raise_contrail_exception(
-                    'NetworkNotFound', net_id=net_id)
-            vn_obj.set_route_table(rt_obj)
-            self._vnc_lib.virtual_network_update(vn_obj)
-
-        # Add logical gateway virtual network
-        router_obj.set_service_instance(si_obj)
         router_obj.set_virtual_network(ext_net_obj)
         self._vnc_lib.logical_router_update(router_obj)
 
     def _router_clear_external_gateway(self, router_obj):
-        project_obj = self._project_read(proj_id=router_obj.parent_uuid)
-
-        # Get the service instance if it exists
-        si_name = 'si_' + router_obj.uuid
-        si_fq_name = project_obj.get_fq_name() + [si_name]
-        try:
-            si_obj = self._vnc_lib.service_instance_read(fq_name=si_fq_name)
-            si_uuid = si_obj.uuid
-        except vnc_exc.NoIdError:
-            si_obj = None
-
-        # Get route table for default route it it exists
-        rt_name = 'rt_' + router_obj.uuid
-        rt_fq_name = project_obj.get_fq_name() + [rt_name]
-        try:
-            rt_obj = self._vnc_lib.route_table_read(fq_name=rt_fq_name)
-        except vnc_exc.NoIdError:
-            rt_obj = None
-
-        # Delete route table
-        if rt_obj:
-            # Disassociate route table to all private networks connected
-            # onto that router
-            for net_ref in rt_obj.get_virtual_network_back_refs() or []:
-                try:
-                    vn_obj = self._vnc_lib.virtual_network_read(
-                        id=net_ref['uuid'])
-                except vnc_exc.NoIdError:
-                    continue
-                vn_obj.del_route_table(rt_obj)
-                self._vnc_lib.virtual_network_update(vn_obj)
-            self._vnc_lib.route_table_delete(id=rt_obj.uuid)
-
-        # Clear logical gateway virtual network
         router_obj.set_virtual_network_list([])
-        router_obj.set_service_instance_list([])
         self._vnc_lib.logical_router_update(router_obj)
-
-        # Delete service instance
-        if si_obj:
-            self._vnc_lib.service_instance_delete(id=si_uuid)
 
     def _set_snat_routing_table(self, router_obj, network_id):
         project_obj = self._project_read(proj_id=router_obj.parent_uuid)
@@ -249,7 +122,8 @@ class LogicalRouterMixin(object):
         try:
             vn_obj = self._vnc_lib.virtual_network_read(id=network_id)
         except vnc_exc.NoIdError:
-            raise n_exceptions.NetworkNotFound(net_id=network_id)
+            self._raise_contrail_exception(
+                'NetworkNotFound', net_id=network_id)
 
         vn_obj.set_route_table(rt_obj)
         self._vnc_lib.virtual_network_update(vn_obj)
@@ -268,7 +142,8 @@ class LogicalRouterMixin(object):
         try:
             vn_obj = self._vnc_lib.virtual_network_read(id=network_id)
         except vnc_exc.NoIdError:
-            raise n_exceptions.NetworkNotFound(net_id=network_id)
+            self._raise_contrail_exception(
+                'NetworkNotFound', net_id=network_id)
         vn_obj.del_route_table(rt_obj)
         self._vnc_lib.virtual_network_update(vn_obj)
 
@@ -566,13 +441,15 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
             vn_obj = self._subnet_handler.get_vn_obj_for_subnet_id(subnet_id)
             fixed_ip = {'ip_address': subnet_vnc.default_gateway,
                         'subnet_id': subnet_id}
-            port_q = {'tenant_id': self._project_id_vnc_to_neutron(vn_obj.parent_uuid),
-                      'network_id': vn_obj.uuid,
-                      'fixed_ips': [fixed_ip],
-                      'admin_state_up': True,
-                      'device_id': router_id,
-                      'device_owner': n_constants.DEVICE_OWNER_ROUTER_INTF,
-                      'name': ''}
+            port_q = {
+                'tenant_id': self._project_id_vnc_to_neutron(
+                    vn_obj.parent_uuid),
+                'network_id': vn_obj.uuid,
+                'fixed_ips': [fixed_ip],
+                'admin_state_up': True,
+                'device_id': router_id,
+                'device_owner': n_constants.DEVICE_OWNER_ROUTER_INTF,
+                'name': ''}
             port = self._vmi_handler.resource_create(context=context,
                                                      port_q=port_q)
             vmi_obj = self._vmi_handler.get_vmi_obj(port['id'])
@@ -643,10 +520,11 @@ class LogicalRouterInterfaceHandler(res_handler.ResourceGetHandler,
         self._vnc_lib.virtual_machine_interface_update(vmi_obj)
         router_obj.add_virtual_machine_interface(vmi_obj)
         self._resource_update(router_obj)
-        info = {'id': router_id,
-                'tenant_id': self._project_id_vnc_to_neutron(vn_obj.parent_uuid),
-                'port_id': vmi_obj.uuid,
-                'subnet_id': subnet_id}
+        info = {
+            'id': router_id,
+            'tenant_id': self._project_id_vnc_to_neutron(vn_obj.parent_uuid),
+            'port_id': vmi_obj.uuid,
+            'subnet_id': subnet_id}
         return info
 
     def remove_router_interface(self, context, router_id, port_id=None,

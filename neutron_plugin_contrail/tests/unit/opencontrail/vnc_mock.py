@@ -1,4 +1,4 @@
-#    Copyright
+#  Copyright (c) 2015 Cloudwatt
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -11,13 +11,13 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+# @author: Babu Shanmugam - eNovance (Red Hat)
 
 import json
 import uuid as UUID
-import netaddr
-from neutron.common import ipv6_utils
 
 from cfgm_common import exceptions as vnc_exc
+import netaddr
 from vnc_api import vnc_api
 
 
@@ -161,12 +161,13 @@ class MockVnc(object):
     class CreateCallables(Callables):
         def _check_if_uuid_in_use(self, uuid_value):
             for res_dict in self._resource_collection.itervalues():
-                if res_dict.has_key(uuid_value):
+                if uuid_value in res_dict:
                     return True
             return False
 
         def _mock_add_network_ipam(self, obj):
             actual = obj.add_network_ipam
+
             def _mock(obj, vnsn_data):
                 if 'network_ipam' not in self._resource_collection:
                     self._resource_collection['network_ipam'] = dict()
@@ -249,7 +250,8 @@ class MockVnc(object):
                 if not obj.get_instance_ip_address():
                     subnet = None
                     if not obj.subnet_uuid:
-                        subnet = vn_obj.get_network_ipam_refs()[0]['attr'].get_ipam_subnets()[0]
+                        subnet = vn_obj.get_network_ipam_refs(
+                            )[0]['attr'].get_ipam_subnets()[0]
                         obj.subnet_uuid = subnet.subnet_uuid
                     else:
                         for ipams in vn_obj.get_network_ipam_refs():
@@ -259,16 +261,21 @@ class MockVnc(object):
 
                     if subnet:
                         subnet_cidr = '%s/%s' % (
-                            subnet.subnet.ip_prefix, subnet.subnet.ip_prefix_len)
+                            subnet.subnet.ip_prefix,
+                            subnet.subnet.ip_prefix_len)
+
                         cidr_obj = netaddr.IPNetwork(subnet_cidr)
                         if not hasattr(subnet.subnet, 'ip_prefixed'):
                             setattr(subnet.subnet, "ip_prefixed", 0)
-                        if (netaddr.IPAddress(subnet.default_gateway).words[-1] == subnet.subnet.ip_prefixed + 1):
+                        if (netaddr.IPAddress(
+                                subnet.default_gateway).words[-1] == (
+                                    subnet.subnet.ip_prefixed + 1)):
                             subnet.subnet.ip_prefixed += 2
                         else:
                             subnet.subnet.ip_prefixed += 1
                         ip_address = str(netaddr.IPAddress(
-                            subnet.subnet.ip_prefix) + subnet.subnet.ip_prefixed)
+                            subnet.subnet.ip_prefix) +
+                            subnet.subnet.ip_prefixed)
                         if ip_address not in cidr_obj:
                             rc = MockVnc.DeleteCallables(
                                 self._resource_type,
@@ -276,7 +283,8 @@ class MockVnc(object):
                                 self._resource_collection,
                                 self._server_conn)
                             rc(id=uuid)
-                            raise vnc_exc.HttpError(status_code=409, content='')
+                            raise vnc_exc.HttpError(status_code=409,
+                                                    content='')
                         obj.set_instance_ip_address(ip_address)
                 else:
                     for ipams in vn_obj.get_network_ipam_refs():
@@ -285,8 +293,8 @@ class MockVnc(object):
                                 break
                     subnet_cidr = '%s/%s' % (
                         subnet.subnet.ip_prefix, subnet.subnet.ip_prefix_len)
-                    if netaddr.IPAddress(obj.get_instance_ip_address()) not in \
-                        netaddr.IPNetwork(subnet_cidr):
+                    if (netaddr.IPAddress(obj.get_instance_ip_address(
+                            )) not in netaddr.IPNetwork(subnet_cidr)):
                         rc = MockVnc.DeleteCallables(
                             self._resource_type,
                             self._resource,
@@ -364,7 +372,7 @@ class MockVnc(object):
                 if back_refs in excluded_list:
                     return True
             return False
-            
+
         def __call__(self, **kwargs):
             obj = None
             if 'fq_name' in kwargs and kwargs['fq_name']:
@@ -381,8 +389,10 @@ class MockVnc(object):
             for ref in obj.backref_fields:
                 if getattr(obj, "get_" + ref)():
                     if not self._backref_excluded(self._resource_type, ref):
-                        print " -- Cannot delete %s resource as it still has %s refs %s" % (
-                            self._resource_type, ref, getattr(obj, "get_" + ref)())
+                        print(" -- Cannot delete %s resource as it still "
+                              "has %s refs %s"
+                              % (self._resource_type, ref,
+                                 getattr(obj, "get_" + ref)()))
                         raise vnc_exc.RefsExistError()
 
             self._resource.pop(obj.uuid)
@@ -404,7 +414,7 @@ class MockVnc(object):
                                           obj.uuid)
 
     def __getattr__(self, method):
-        print " -- vnc_method %s" % method
+        print(" -- vnc_method %s" % method)
         (resource, action) = self._break_method(method)
         if action not in ['list', 'read', 'create',
                           'update', 'delete']:
@@ -467,8 +477,8 @@ class MockVnc(object):
         fq_name_str = None
         uid = None
         if 'id' in kwargs:
-            if 'project' not in self.resources_collection or \
-                kwargs['id'] not in self.resources_collection['project']:
+            if 'project' not in self.resources_collection or (
+                    kwargs['id'] not in self.resources_collection['project']):
                 fq_name_str = "default-domain:%s" % kwargs['id']
                 uid = kwargs['id']
 
@@ -478,13 +488,13 @@ class MockVnc(object):
                            if 'fq_name_str' in kwargs else
                            ':'.join(kwargs['fq_name']))
 
-        if 'project' not in self.resources_collection or \
-            (fq_name_str and fq_name_str not in
-                self.resources_collection['project']):
+        if 'project' not in self.resources_collection or (
+                fq_name_str and fq_name_str not in (
+                    self.resources_collection['project'])):
             fq_name = fq_name_str.split(":")
             domain_obj = self.domain_read(fq_name_str=fq_name[0])
-            proj_obj = vnc_api.Project(parent_obj = domain_obj,
-                                       name = fq_name[-1])
+            proj_obj = vnc_api.Project(parent_obj=domain_obj,
+                                       name=fq_name[-1])
             if uid:
                 proj_obj.uuid = uid
             self.project_create(proj_obj)

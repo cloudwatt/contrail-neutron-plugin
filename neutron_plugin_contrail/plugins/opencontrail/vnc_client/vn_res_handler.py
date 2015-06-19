@@ -1,4 +1,4 @@
-#    Copyright
+# Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,14 +12,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import uuid
-
 from cfgm_common import exceptions as vnc_exc
 from neutron.common import constants as n_constants
 from vnc_api import vnc_api
 
 import contrail_res_handler as res_handler
-import subnet_res_handler as subnet_handler
 import vmi_res_handler as vmi_handler
 
 
@@ -254,8 +251,8 @@ class VNetworkUpdateHandler(res_handler.ResourceUpdateHandler, VNetworkMixin):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
         network_q['id'] = net_id
-        vn_obj = self.neutron_dict_to_vn(self._get_vn_obj_from_net_q(
-                                            network_q), network_q)
+        vn_obj = self.neutron_dict_to_vn(
+            self._get_vn_obj_from_net_q(network_q), network_q)
         self._resource_update(vn_obj)
 
         ret_network_q = self.vn_to_neutron_dict(
@@ -269,7 +266,7 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
     resource_get_method = 'virtual_network_read'
     detail = False
 
-    def _network_list_project(self, project_id, count=False):
+    def _network_list_project(self, project_id, count=False, filters=None):
         if project_id:
             try:
                 project_uuid = self._project_id_neutron_to_vnc(project_id)
@@ -280,17 +277,19 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
 
         if count:
             ret_val = self._resource_list(parent_id=project_uuid,
-                                          count=True)
+                                          count=True, filters=filters)
         else:
             ret_val = self._resource_list(parent_id=project_uuid,
-                                          detail=True)
+                                          detail=True, filters=filters)
 
         return ret_val
     # end _network_list_project
 
     def _network_list_shared_and_ext(self):
         ret_list = []
-        nets = self._network_list_project(project_id=None)
+        nets = self._network_list_project(
+            project_id=None, filters={'is_shared': True,
+                                      'router_external': True})
         for net in nets:
             if net.get_router_external() and net.get_is_shared():
                 ret_list.append(net)
@@ -299,7 +298,8 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
 
     def _network_list_router_external(self):
         ret_list = []
-        nets = self._network_list_project(project_id=None)
+        nets = self._network_list_project(
+            project_id=None, filters={'router_external': True})
         for net in nets:
             if not net.get_router_external():
                 continue
@@ -309,7 +309,8 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
 
     def _network_list_shared(self):
         ret_list = []
-        nets = self._network_list_project(project_id=None)
+        nets = self._network_list_project(
+            project_id=None, filters={'is_shared': True})
         for net in nets:
             if not net.get_is_shared():
                 continue
@@ -362,7 +363,8 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
                   'shared' in filters):
                 all_net_objs.extend(self._network_list_shared_and_ext())
             else:
-                project_uuid = self._project_id_neutron_to_vnc(context['tenant'])
+                project_uuid = self._project_id_neutron_to_vnc(
+                    context['tenant'])
                 if not filters:
                     all_net_objs.extend(self._network_list_router_external())
                     all_net_objs.extend(self._network_list_shared())
@@ -433,8 +435,8 @@ class VNetworkGetHandler(res_handler.ResourceGetHandler, VNetworkMixin):
                 admin_state_up = False
             else:
                 admin_state_up = net_obj.get_id_perms().enable
-            if not self._filters_is_present(
-                filters, 'admin_state_up', admin_state_up):
+            if not self._filters_is_present(filters, 'admin_state_up',
+                                            admin_state_up):
                 continue
             try:
                 net_info = self.vn_to_neutron_dict(

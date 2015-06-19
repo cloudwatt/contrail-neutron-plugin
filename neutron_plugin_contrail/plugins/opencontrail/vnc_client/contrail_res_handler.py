@@ -1,4 +1,4 @@
-#    Copyright
+# Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -15,10 +15,9 @@
 import uuid
 
 from cfgm_common import exceptions as vnc_exc
+from neutron_plugin_contrail.plugins.opencontrail import contrail_plugin_base
 from vnc_api import common as vnc_api_common
 from vnc_api import vnc_api
-
-from neutron_plugin_contrail.plugins.opencontrail import contrail_plugin_base
 
 
 class ContrailResourceHandler(object):
@@ -271,4 +270,3 @@ class InstanceIpHandler(ResourceGetHandler, ResourceCreateHandler,
 
     def delete_iip_obj(self, iip_id):
         self._resource_delete(id=iip_id)
-

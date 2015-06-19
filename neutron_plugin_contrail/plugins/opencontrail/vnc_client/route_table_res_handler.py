@@ -1,4 +1,4 @@
-#    Copyright
+#  Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,8 +12,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import uuid
-
 from cfgm_common import exceptions as vnc_exc
 from vnc_api import vnc_api
 
@@ -26,7 +24,8 @@ class RouteTableMixin(object):
 
         # replace field names
         rt_q_dict['id'] = rt_obj.uuid
-        rt_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(rt_obj.parent_uuid)
+        rt_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
+            rt_obj.parent_uuid)
         rt_q_dict['name'] = rt_obj.name
         rt_q_dict['fq_name'] = rt_obj.fq_name
 

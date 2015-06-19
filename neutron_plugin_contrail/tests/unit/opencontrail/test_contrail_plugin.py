@@ -15,31 +15,15 @@
 
 
 import datetime
-import json
 import uuid
 
-import mock
-import netaddr
 try:
     from oslo_config import cfg
 except ImportError:
     from oslo.config import cfg
-from testtools import matchers
-import webob.exc
 
 from neutron.api import extensions
-from neutron.api.v2 import attributes as attr
-from neutron.api.v2 import base as api_base
-from neutron.common import exceptions as exc
-from neutron import context as neutron_context
-from neutron.db import api as db
-from neutron.db import db_base_plugin_v2
-from neutron.db import external_net_db
-from neutron.db import l3_db
-from neutron.db import quota_db  # noqa
-from neutron.db import securitygroups_db
 from neutron.extensions import portbindings
-from neutron.extensions import securitygroup as ext_sg
 from neutron.tests.unit import _test_extension_portbindings as test_bindings
 
 try:
@@ -62,13 +46,13 @@ try:
 except ImportError:
     from neutron.tests.unit.extensions import test_l3 as test_l3_plugin
 
-
-from vnc_api import vnc_api
+from neutron_plugin_contrail.plugins.opencontrail.vnc_client import (
+    contrail_res_handler)
 from neutron_plugin_contrail.tests.unit.opencontrail.vnc_mock import MockVnc
-from neutron_plugin_contrail.plugins.opencontrail.vnc_client import contrail_res_handler
+from vnc_api import vnc_api
 
-
-CONTRAIL_PKG_PATH = "neutron_plugin_contrail.plugins.opencontrail.contrail_plugin_v3"
+CONTRAIL_PKG_PATH = (
+    "neutron_plugin_contrail.plugins.opencontrail.contrail_plugin_v3")
 
 
 class Context(object):
@@ -87,7 +71,8 @@ class Context(object):
 
 
 class KeyStoneInfo(object):
-    """To generate Keystone Authentication information
+    """To generate Keystone Authentication information.
+
        Contrail Driver expects Keystone auth info for testing purpose.
     """
     auth_protocol = 'http'
@@ -109,8 +94,9 @@ class JVContrailPluginTestCase(test_plugin.NeutronDbPluginV2TestCase):
         cfg.CONF.keystone_authtoken = KeyStoneInfo()
         from neutron_plugin_contrail import extensions
         cfg.CONF.api_extensions_path = "extensions:" + extensions.__path__[0]
-        contrail_res_handler.ContrailResourceHandler._project_id_vnc_to_neutron = lambda x, y: y
-        contrail_res_handler.ContrailResourceHandler._project_id_neutron_to_vnc = lambda x, y: y
+        res_handler = contrail_res_handler.ContrailResourceHandler
+        res_handler._project_id_vnc_to_neutron = lambda x, y: y
+        res_handler._project_id_neutron_to_vnc = lambda x, y: y
         vnc_api.VncApi = MockVnc
         self.domain_obj = vnc_api.Domain()
         MockVnc().domain_create(self.domain_obj)
@@ -177,7 +163,7 @@ class TestContrailSubnetsV2(test_plugin.TestSubnetsV2,
         self.skipTest("Contrail does not support updating gateway ip")
 
     def test_update_subnet_route_with_too_many_entries(self):
-        self.skipTest("TODO: Investigate - contrail support mutliple host routes")
+        self.skipTest("TODO: Investigate - support multiple host routes")
 
     def test_update_subnet_gw_ip_in_use_returns_409(self):
         self.skipTest("Contrail does not support updating gateway ip")
@@ -349,7 +335,8 @@ class TestContrailSecurityGroups(test_sg.TestSecurityGroups,
 
 class TestContrailPortBinding(JVContrailPluginTestCase,
                               test_bindings.PortBindingsTestCase):
-    from neutron_plugin_contrail.plugins.opencontrail.contrail_plugin import NeutronPluginContrailCoreV2
+    # from neutron_plugin_contrail.plugins.opencontrail.contrail_plugin
+    # import (NeutronPluginContrailCoreV2)
     VIF_TYPE = portbindings.VIF_TYPE_VROUTER
     HAS_PORT_FILTER = True
 
@@ -429,12 +416,6 @@ class TestContrailL3NatTestCase(JVContrailPluginTestCase,
 
     def test_router_create_call_extensions(self):
         self.skipTest("Feature needs to be implemented")
-        
-    def test_router_add_interface_subnet_with_port_from_other_tenant(self):
-        self.skipTest("TODO : Need to revisit")
-
-    def test_router_create_call_extensions(self):
-        self.skipTest("TODO : Need to revisit")
 
     def test_router_add_interface_subnet_with_port_from_other_tenant(self):
         self.skipTest("TODO : Need to revisit")
@@ -449,6 +430,5 @@ class TestContrailL3NatTestCase(JVContrailPluginTestCase,
         self.skipTest("TODO : Need to revisit")
 
     def test_create_non_router_port_device_id_of_other_teants_router_update(
-        self):
+            self):
         self.skipTest("Contrail doesn't support this test case")
-        
