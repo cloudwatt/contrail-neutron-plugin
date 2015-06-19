@@ -1,4 +1,4 @@
-#    Copyright
+# Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -26,9 +26,10 @@ except ImportError:
 
 import contrail_res_handler as res_handler
 import fip_res_handler
+from sg_res_handler import SecurityGroupHandler
 import subnet_res_handler as subnet_handler
 import vn_res_handler as vn_handler
-from sg_res_handler import SecurityGroupHandler
+
 
 class VMInterfaceMixin(object):
     @staticmethod
@@ -38,8 +39,8 @@ class VMInterfaceMixin(object):
         # against = [{'subnet_id': 'uuid', 'ip_address': u'20.0.0.5'}]
 
         for item in against:
-            if item['ip_address'] in check['ip_address'] and \
-                item['subnet_id'] in check['subnet_id']:
+            if item['ip_address'] in check['ip_address'] and (
+                    item['subnet_id'] in check['subnet_id']):
                 return True
 
         return False
@@ -485,7 +486,6 @@ class VMInterfaceMixin(object):
         # 1. find existing ips on port
         # 2. add new ips on port from update body
         # 3. delete old/stale ips on port
-
         subnets = dict()
         ipam_refs = vn_obj.get_network_ipam_refs()
         for ipam_ref in ipam_refs or []:
@@ -495,24 +495,25 @@ class VMInterfaceMixin(object):
                                   subnet_vnc.subnet.get_ip_prefix_len())
                 subnets[subnet_vnc.subnet_uuid] = cidr
 
-        def get_iip_subnet_uuid(iip_address):
-            for sn_uuid, cidr in subnets.items():
-                if netaddr.IPAddress(iip_address) in netaddr.IPNetwork(cidr):
-                    return sn_uuid
-
         stale_ip_ids = {}
         ip_handler = res_handler.InstanceIpHandler(self._vnc_lib)
         for iip in getattr(vmi_obj, 'instance_ip_back_refs', []):
             iip_obj = ip_handler.get_iip_obj(id=iip['uuid'])
             ip_addr = iip_obj.get_instance_ip_address()
-            stale_ip_ids[get_iip_subnet_uuid(ip_addr)] = iip['uuid']
+            stale_ip_ids[ip_addr] = iip['uuid']
 
         created_iip_ids = []
-        new_iip_subnets = []
         for fixed_ip in fixed_ips:
             try:
                 ip_addr = fixed_ip.get('ip_address')
                 if ip_addr is not None:
+                    try:
+                        # this ip survives to next gen
+                        del stale_ip_ids[ip_addr]
+                        continue
+                    except KeyError:
+                        pass
+
                     if netaddr.IPAddress(ip_addr).version == 4:
                         ip_family = "v4"
                     elif netaddr.IPAddress(ip_addr).version == 6:
@@ -523,18 +524,12 @@ class VMInterfaceMixin(object):
                         ip_handler._resource_delete(id=iip_id)
                     self._raise_contrail_exception(
                         'BadRequest',
-                        msg='Subnet invalid for network')
+                        msg='Subnet invalid for network', resource='port')
 
                 ip_family = fixed_ip.get('ip_family', ip_family)
                 ip_id = ip_handler.create_instance_ip(vn_obj, vmi_obj, ip_addr,
                                                       subnet_id, ip_family)
                 created_iip_ids.append(ip_id)
-                if stale_ip_ids:
-                    ip_obj = ip_handler.get_iip_obj(ip_id)
-                    new_iip_subnets.append(get_iip_subnet_uuid(
-                        ip_obj.get_instance_ip_address()))
-
-                
             except vnc_exc.HttpError as e:
                 # Resources are not available
                 for iip_id in created_iip_ids:
@@ -543,29 +538,29 @@ class VMInterfaceMixin(object):
                     if 'subnet_id' in fixed_ip:
                         self._raise_contrail_exception(
                             'InvalidIpForSubnet',
-                            ip_address=fixed_ip.get('ip_address'))
+                            ip_address=fixed_ip.get('ip_address'),
+                            resource='port')
                     else:
                         self._raise_contrail_exception(
                             'InvalidIpForNetwork',
-                            ip_address=fixed_ip.get('ip_address'))
+                            ip_address=fixed_ip.get('ip_address'),
+                            resource='port')
                 else:
                     self._raise_contrail_exception(
                         'IpAddressGenerationFailure',
                         net_id=vn_obj.get_uuid(), resource='port')
 
         iips_total = list(created_iip_ids)
-        for stale_sn_id, stale_id in stale_ip_ids.items():
-            if stale_sn_id in new_iip_subnets or not fixed_ips:
-               ip_handler.delete_iip_obj(stale_id)
-            else:
-                iips_total.append(stale_id)
+        for stale_ip, stale_id in stale_ip_ids.items():
+            ip_handler.delete_iip_obj(stale_id)
 
-        if len(iips_total) > cfg.CONF.max_fixed_ips_per_port:
-            for iip_id in iips_total:
-                ip_handler.delete_iip_obj(iip_id)
-            self._raise_contrail_exception(
-                'BadRequest',
-                msg="IIPS exceeds max limit")
+        if hasattr(cfg.CONF, 'max_fixed_ips_per_port'):
+            if len(iips_total) > cfg.CONF.max_fixed_ips_per_port:
+                for iip_id in iips_total:
+                    ip_handler.delete_iip_obj(iip_id)
+                self._raise_contrail_exception(
+                    'BadRequest',
+                    msg="IIPS exceeds max limit")
 
     def get_vmi_tenant_id(self, vmi_obj):
         if vmi_obj.parent_type != "project":
@@ -696,7 +691,7 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
         except Exception as e:
             self._resource_delete(id=port_id)
             self._raise_contrail_exception(
-                    'BadRequest', resource='port', msg=str(e))
+                'BadRequest', resource='port', msg=str(e))
             # failure in creating the instance ip. Roll back
         # TODO() below reads back default parent name, fix it
         vmi_obj = self._resource_get(id=port_id,
@@ -736,13 +731,13 @@ class VMInterfaceUpdateHandler(res_handler.ResourceUpdateHandler,
                 vmi_obj.parent_uuid,
                 net_id, port_q['mac_address'])
 
-        vmi_obj = self._neutron_port_to_vmi(port_q, vmi_obj=vmi_obj, update=True)
+        vmi_obj = self._neutron_port_to_vmi(port_q, vmi_obj=vmi_obj,
+                                            update=True)
         self._resource_update(vmi_obj)
         if 'fixed_ips' in port_q:
             self._create_instance_ips(vn_obj, vmi_obj,
                                       port_q.get('fixed_ips'))
         vn_obj = self._resource_get(id=port_id)
-        extensions_enabled = port_q.get('contrail_extension_enabled', True)
         ret_port_q = self._vmi_to_neutron_port(
             vmi_obj, extensions_enabled=contrail_extensions_enabled)
 
@@ -823,7 +818,7 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
     def _get_vmis_nets_ips(self, context, project_ids=None,
                            device_ids=None, vmi_uuids=None, vn_ids=None):
         vn_list_handler = vn_handler.VNetworkGetHandler(self._vnc_lib)
-        pool =  eventlet.GreenPool()
+        pool = eventlet.GreenPool()
         vn_objs_t = pool.spawn(vn_list_handler.get_vn_obj_list,
                                parent_id=project_ids, detail=True)
 
@@ -906,12 +901,15 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
     def get_vmi_list(self, **kwargs):
         return self._resource_list(**kwargs)
 
-    def resource_list(self, context=None, filters={}, fields=None):
+    def resource_list(self, context=None, filters=None, fields=None):
         if not context:
             context = {'is_admin': True}
 
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
+
+        if filters is None:
+            filters = {}
 
         project_ids = []
         tenant_ids = []
@@ -946,9 +944,7 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
                 continue
 
             # TODO(safchain) revisit these filters if necessary
-            if not self._filters_is_present(filters,
-                                            'name',
-                                             port['name']):
+            if not self._filters_is_present(filters, 'name', port['name']):
                 continue
             if not self._filters_is_present(
                     filters, 'device_owner', port['device_owner']):
@@ -993,9 +989,11 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
 
         if 'tenant_id' in filters:
             if isinstance(filters['tenant_id'], list):
-                project_id = self._project_id_neutron_to_vnc(filters['tenant_id'][0])
+                project_id = self._project_id_neutron_to_vnc(
+                    filters['tenant_id'][0])
             else:
-                project_id = self._project_id_neutron_to_vnc(filters['tenant_id'])
+                project_id = self._project_id_neutron_to_vnc(
+                    filters['tenant_id'])
 
             nports = len(self._resource_list(parent_id=project_id))
         else:

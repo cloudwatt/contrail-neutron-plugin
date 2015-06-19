@@ -1,4 +1,4 @@
-#    Copyright
+#  Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -71,7 +71,8 @@ class SecurityGroupRuleMixin(object):
                     pass
 
         sgr_q_dict['id'] = sg_rule.get_rule_uuid()
-        sgr_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(sg_obj.parent_uuid)
+        sgr_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
+            sg_obj.parent_uuid)
         sgr_q_dict['security_group_id'] = sg_obj.uuid
         if hasattr(sg_rule, 'get_ethertype'):
             sgr_q_dict['ethertype'] = sg_rule.get_ethertype()
@@ -229,8 +230,8 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
             val = int(value)
             # TODO(ethuleau): support all protocol numbers
             if val >= 0 and val <= 255:
-                return IP_PROTOCOL_MAP[val] if val in IP_PROTOCOL_MAP \
-                    else str(val)
+                return IP_PROTOCOL_MAP[val] if val in IP_PROTOCOL_MAP else (
+                    str(val))
             self._raise_contrail_exception(
                 'SecurityGroupRuleInvalidProtocol',
                 protocol=value, values=IP_PROTOCOL_MAP.values(),
@@ -297,11 +298,11 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
                     self._vnc_lib).get_sg_obj(id=sgr_q['remote_group_id'])
             except vnc_exc.NoIdError:
                 self._raise_contrail_exception('SecurityGroupNotFound',
-                                                id=sgr_q['remote_group_id'],
-                                                resource='security_group_rule')
+                                               id=sgr_q['remote_group_id'],
+                                               resource='security_group_rule')
 
             if sgr_q.get('tenant_id') and (
-                sg_obj.parent_uuid != sgr_q['tenant_id']):
+                    sg_obj.parent_uuid != sgr_q['tenant_id']):
                 self._raise_contrail_exception("NotFound")
 
             endpt = [vnc_api.AddressType(
@@ -367,7 +368,8 @@ class SecurityGroupRuleCreateHandler(res_handler.ResourceCreateHandler,
         self._validate_port_range(sgr_q)
         sg_id = sgr_q['security_group_id']
         sg_rule = self._security_group_rule_neutron_to_vnc(sgr_q)
-        self._security_group_rule_create(sg_id, sg_rule, sgr_q.get('tenant_id', None))
+        self._security_group_rule_create(sg_id, sg_rule,
+                                         sgr_q.get('tenant_id', None))
         ret_sg_rule_q = self._security_group_rule_vnc_to_neutron(sg_id,
                                                                  sg_rule)
 

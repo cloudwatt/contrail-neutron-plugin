@@ -1,4 +1,4 @@
-#    Copyright
+# Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -192,7 +192,7 @@ class SubnetMixin(object):
     @staticmethod
     def _subnet_neutron_to_vnc(subnet_q):
         if not subnet_q.get('cidr'):
-            self._raise_contrail_exception(
+            ContrailResourceHandler._raise_contrail_exception(
                 'BadRequest', msg='cidr is empty',
                 resource='subnet')
 
@@ -217,9 +217,8 @@ class SubnetMixin(object):
             default_gw = subnet_q['gateway_ip']
             gw_ip_obj = netaddr.IPAddress(default_gw)
             if default_gw != '0.0.0.0':
-                if gw_ip_obj not in cidr or \
-                    gw_ip_obj.words[-1] == 255 or \
-                    gw_ip_obj.words[-1] == 0:
+                if gw_ip_obj not in cidr or gw_ip_obj.words[-1] == 255 or (
+                        gw_ip_obj.words[-1] == 0):
                     ContrailResourceHandler._raise_contrail_exception(
                         'BadRequest', resource='subnet',
                         msg="Invalid Gateway ip address")
@@ -258,9 +257,11 @@ class SubnetMixin(object):
                         ContrailResourceHandler._raise_contrail_exception(
                             'BadRequest', resource='subnet',
                             msg='Pool addresses invalid')
-                    elif (rng['start'] >= ip_start and rng['start'] <= ip_end) or \
-                         (rng['end'] >= ip_start and rng['end'] <= ip_end):
-                         ContrailResourceHandler._raise_contrail_exception(
+                    elif (rng['start'] >= ip_start and (
+                            rng['start'] <= ip_end)) or (
+                                rng['end'] >= ip_start and (
+                                    rng['end'] <= ip_end)):
+                        ContrailResourceHandler._raise_contrail_exception(
                             'OverlappingAllocationPools',
                             pool_2="%s-%s" % (ip_start, ip_end),
                             pool_1="%s-%s" % (rng['start'], rng['end']),
@@ -333,7 +334,8 @@ class SubnetMixin(object):
             sn_q_dict['name'] = sn_name
         else:
             sn_q_dict['name'] = ''
-        sn_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(vn_obj.parent_uuid)
+        sn_q_dict['tenant_id'] = self._project_id_vnc_to_neutron(
+            vn_obj.parent_uuid)
         sn_q_dict['network_id'] = vn_obj.uuid
         sn_q_dict['ipv6_ra_mode'] = None
         sn_q_dict['ipv6_address_mode'] = None
@@ -353,8 +355,10 @@ class SubnetMixin(object):
 
         sn_q_dict['id'] = sn_id
 
-        sn_q_dict['gateway_ip'] = subnet_vnc.default_gateway \
-            if subnet_vnc.default_gateway != '0.0.0.0' else None
+        if subnet_vnc.default_gateway != '0.0.0.0':
+            sn_q_dict['gateway_ip'] = subnet_vnc.default_gateway
+        else:
+            sn_q_dict['gateway_ip'] = None
 
         sn_q_dict['allocation_pools'] = self._get_allocation_pools_dict(
             subnet_vnc.get_allocation_pools(), sn_q_dict['gateway_ip'], cidr)

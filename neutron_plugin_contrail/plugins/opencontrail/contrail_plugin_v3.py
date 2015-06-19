@@ -1,4 +1,4 @@
-#    Copyright
+# Copyright 2015.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,44 +12,26 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import time
+
 try:
     from oslo_config import cfg
 except ImportError:
     from oslo.config import cfg
-import requests
-
 from neutron.api.v2 import attributes as attr
 from neutron.common import exceptions as exc
-from neutron.db import portbindings_base
-from neutron.db import quota_db  # noqa
-from neutron.extensions import allowedaddresspairs
-from neutron.extensions import external_net
-from neutron.extensions import l3
-from neutron.extensions import portbindings
-from neutron.extensions import securitygroup
-from neutron import neutron_plugin_base_v2
-try:
-    from neutron.openstack.common import importutils
-except ImportError:
-    from oslo_utils import importutils
-
-try:
-    from neutron.openstack.common import jsonutils as json
-except ImportError:
-    from oslo_serialization import jsonutils as json
+import requests
 
 try:
     from neutron.openstack.common import log as logging
 except ImportError:
     from oslo_log import log as logging
 
-from simplejson import JSONDecodeError
-from eventlet.greenthread import getcurrent
+from eventlet import greenthread
 
 import contrail_plugin_base as plugin_base
 
 from vnc_api import vnc_api
-
 
 from vnc_client import fip_res_handler as fip_handler
 from vnc_client import ipam_res_handler as ipam_handler
@@ -57,9 +39,7 @@ from vnc_client import policy_res_handler as policy_handler
 from vnc_client import route_table_res_handler as route_table_handler
 from vnc_client import router_res_handler as rtr_handler
 from vnc_client import sg_res_handler as sg_handler
-
 from vnc_client import sgrule_res_handler as sgrule_handler
-
 from vnc_client import subnet_res_handler as subnet_handler
 from vnc_client import svc_instance_res_handler as svc_instance_handler
 from vnc_client import vmi_res_handler as vmi_handler
@@ -72,9 +52,6 @@ vnc_extra_opts = [
     cfg.BoolOpt('apply_subnet_host_routes', default=False),
     cfg.BoolOpt('multi_tenancy', default=False)
 ]
-
-class InvalidContrailExtensionError(exc.ServiceUnavailable):
-    message = _("Invalid Contrail Extension: %(ext_name) %(ext_class)")
 
 
 class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
@@ -130,13 +107,13 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         while not connected:
             try:
                 self._vnc_lib = vnc_api.VncApi(
-                     admin_user, admin_password, admin_tenant_name,
-                     api_srvr_ip, api_srvr_port, api_server_url,
-                     auth_host=auth_host, auth_port=auth_port,
-                     auth_protocol=auth_protocol, auth_url=auth_url,
-                     auth_type=auth_type)
+                    admin_user, admin_password, admin_tenant_name,
+                    api_srvr_ip, api_srvr_port, api_server_url,
+                    auth_host=auth_host, auth_port=auth_port,
+                    auth_protocol=auth_protocol, auth_url=auth_url,
+                    auth_type=auth_type)
                 connected = True
-            except requests.exceptions.RequestException as e:
+            except requests.exceptions.RequestException:
                 time.sleep(3)
         return True
 
@@ -147,7 +124,7 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         # forward user token to API server for RBAC
         # token saved earlier in the pipeline
         try:
-            auth_token = getcurrent().contrail_vars.token
+            auth_token = greenthread.getcurrent().contrail_vars.token
             self._vnc_lib.set_auth_token(auth_token)
         except AttributeError:
             pass
@@ -225,12 +202,12 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         """Add interface to a router."""
 
         if not interface_info:
-            msg = _("Either subnet_id or port_id must be specified")
+            msg = "Either subnet_id or port_id must be specified"
             raise exc.BadRequest(resource='router', msg=msg)
 
         if 'port_id' in interface_info:
             if 'subnet_id' in interface_info:
-                msg = _("Cannot specify both subnet-id and port-id")
+                msg = "Cannot specify both subnet-id and port-id"
                 raise exc.BadRequest(resource='router', msg=msg)
 
         self._set_user_auth_token()
@@ -239,7 +216,7 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
 
         rtr_iface_handler = rtr_handler.LogicalRouterInterfaceHandler(
             self._vnc_lib)
-        return  rtr_iface_handler.add_router_interface(
+        return rtr_iface_handler.add_router_interface(
             self._get_context_dict(context), router_id,
             port_id=port_id, subnet_id=subnet_id)
 
@@ -247,7 +224,7 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         """Delete interface from a router."""
 
         if not interface_info:
-            msg = _("Either subnet_id or port_id must be specified")
+            msg = "Either subnet_id or port_id must be specified"
             raise exc.BadRequest(resource='router', msg=msg)
 
         port_id = interface_info.get('port_id')
@@ -256,6 +233,6 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         self._set_user_auth_token()
         rtr_iface_handler = rtr_handler.LogicalRouterInterfaceHandler(
             self._vnc_lib)
-        return  rtr_iface_handler.remove_router_interface(
+        return rtr_iface_handler.remove_router_interface(
             self._get_context_dict(context), router_id, port_id=port_id,
             subnet_id=subnet_id)
