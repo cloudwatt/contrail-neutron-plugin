@@ -163,8 +163,6 @@ class VirtualIpManager(ResourceManager):
             # DEVICE_OWNER_LOADBALANCER is only supported from JUNO onwards
             pass
 
-        sg_obj = SecurityGroup("default", project)
-        vmi.add_security_group(sg_obj)
         self._api.virtual_machine_interface_create(vmi)
 
         iip_obj = InstanceIp(name=vip_id)
