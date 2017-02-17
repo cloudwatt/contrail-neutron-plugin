@@ -1,2 +1,2 @@
-vnc_api==2.21
-cfgm_common==2.21
+vnc_api==2.21+git81116a9
+cfgm_common==2.21+git81116a9
