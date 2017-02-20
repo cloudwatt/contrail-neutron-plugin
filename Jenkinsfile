@@ -9,7 +9,7 @@ node('dockerHost_int0'){
           description: 'Contrail-neutron-plugin Application git URL',
           name: 'GITURL'],
        [$class: 'StringParameterDefinition',
-          defaultValue: 'testcontrail',
+          defaultValue: 'R2.21-cloudwatt',
           description: 'Contrail Application BranchName/Tag/HashCommit',
           name: 'BRANCH']
   ]],
