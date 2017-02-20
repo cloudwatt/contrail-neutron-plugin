@@ -23,7 +23,7 @@ def get_version():
     try:
         branch=subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0'])
         sha=subprocess.check_output(['git', 'log', '--abbrev', '--format=format:%h', '-n', '1'])
-        return "%s-git%s" % (branch.strip(), sha.strip())
+        return "%s+git%s" % (branch.strip(), sha.strip())
     except subprocess.CalledProcessError:
         return datetime.now().strftime('%Y.%m+%d%H%M%S.cw')
 
