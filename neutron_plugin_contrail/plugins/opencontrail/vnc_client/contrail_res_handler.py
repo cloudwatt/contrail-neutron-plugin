@@ -122,11 +122,6 @@ class ResourceCreateHandler(ContrailResourceHandler):
             self._raise_contrail_exception('BadRequest',
                                            msg=str(e),
                                            resource=res_type)
-        except vnc_exc.OverQuota as e:
-            res_type = obj.get_type()
-            self._raise_contrail_exception('OverQuota',
-                                           overs=[res_type],
-                                           msg=str(e))
         return obj_uuid
 
 
