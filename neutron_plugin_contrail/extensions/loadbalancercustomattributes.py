@@ -1,5 +1,7 @@
-from neutron.api.v2 import attributes as attr
-from neutron.api import extensions
+try:
+    from neutron.api.extensions import ExtensionDescriptor
+except ImportError:
+    from neutron_lib.api.extensions import ExtensionDescriptor
 
 def _validate_custom_attributes(data, valid_values=None):
     if not isinstance(data, list):
@@ -9,21 +11,33 @@ def _validate_custom_attributes(data, valid_values=None):
 def convert_none_to_empty_list(value):
     return [] if value is None else value
 
-attr.validators['type:customattributes'] = _validate_custom_attributes
+try:
+    from neutron.api.v2.attributes import ATTR_NOT_SPECIFIED
+except:
+    from neutron_lib.constants import ATTR_NOT_SPECIFIED
+
+from neutron.api.v2 import attributes as attrs
+if hasattr(attrs, 'validators'):
+    attrs.validators['type:customattributes'] = _validate_custom_attributes
+else:
+    from neutron_lib.api import validators
+    validators.add_validator('type:customattributes',
+                             _validate_custom_attributes)
+
 
 # Extended_Attribute MAP
 EXTENDED_ATTRIBUTES_2_0 = {
     'pools': {
         'custom_attributes': {'allow_post': True, 'allow_put': True,
                               'convert_to': convert_none_to_empty_list,
-                              'default': attr.ATTR_NOT_SPECIFIED,
+                              'default': ATTR_NOT_SPECIFIED,
                               'validate': {'type:customattributes': None},
                               'is_visible': True},
     }
 }
 
 
-class Loadbalancercustomattributes(extensions.ExtensionDescriptor):
+class Loadbalancercustomattributes(ExtensionDescriptor):
 
     @classmethod
     def get_name(cls):

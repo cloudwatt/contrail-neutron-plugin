@@ -16,7 +16,14 @@ except ImportError:
 
 from cfgm_common import analytics_client
 from cfgm_common import exceptions as vnc_exc
-from neutron.common import exceptions as n_exc
+try:
+    from neutron.common.exceptions import BadRequest
+except ImportError:
+    from neutron_lib.exceptions import BadRequest
+try:
+    from neutron.common.exceptions import NotAuthorized
+except ImportError:
+    from neutron_lib.exceptions import NotAuthorized
 
 try:
     from neutron.extensions import loadbalancer
@@ -66,7 +73,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
             self.auth_url = "/v2.0/tokens"
 
         try:
-            self.auth_type = cfg.CONF.keystone_authtoken.auth_type
+            self.auth_type = cfg.CONF.auth_strategy
         except cfg.NoSuchOptError:
             self.auth_type = "keystone"
 
@@ -74,6 +81,11 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
             self.api_server_url = cfg.CONF.APISERVER.api_server_url
         except cfg.NoSuchOptError:
             self.api_server_url = "/"
+
+        try:
+            self.auth_token_url= cfg.CONF.APISERVER.auth_token_url
+        except cfg.NoSuchOptError:
+            self.auth_token_url = None
 
     @property
     def api(self):
@@ -91,7 +103,8 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
                         auth_protocol=self.auth_protocol,
                         auth_url=self.auth_url, auth_type=self.auth_type,
                         wait_for_connect=True,
-                        api_server_use_ssl=self.api_srvr_use_ssl)
+                        api_server_use_ssl=self.api_srvr_use_ssl,
+                        auth_token_url=self.auth_token_url)
                 connected = True
             except requests.exceptions.RequestException:
                 time.sleep(3)
@@ -150,7 +163,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         try:
             return self.vip_manager.create(context, vip)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='vip', msg=str(ex))
+            raise BadRequest(resource='vip', msg=str(ex))
 
     def update_vip(self, context, id, vip):
         return self.vip_manager.update(context, id, vip)
@@ -168,7 +181,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         try:
             return self.pool_manager.create(context, pool)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='pool', msg=str(ex))
+            raise BadRequest(resource='pool', msg=str(ex))
 
     def update_pool(self, context, id, pool):
         return self.pool_manager.update(context, id, pool)
@@ -220,7 +233,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
             tenant_id = str(uuid.UUID(context.tenant_id))
             if tenant_id != pool.parent_uuid or \
                     tenant_id != monitor.parent_uuid:
-                raise n_exc.NotAuthorized()
+                raise NotAuthorized()
 
         pool_refs = monitor.get_loadbalancer_pool_back_refs()
         if pool_refs is not None:
@@ -304,7 +317,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         try:
             return self.member_manager.create(context, member)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='member', msg=str(ex))
+            raise BadRequest(resource='member', msg=str(ex))
 
     def update_member(self, context, id, member):
         return self.member_manager.update(context, id, member)
@@ -322,7 +335,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         try:
             return self.monitor_manager.create(context, health_monitor)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='health_monitor', msg=str(ex))
+            raise BadRequest(resource='health_monitor', msg=str(ex))
 
     def update_health_monitor(self, context, id, health_monitor):
         return self.monitor_manager.update(context, id, health_monitor)

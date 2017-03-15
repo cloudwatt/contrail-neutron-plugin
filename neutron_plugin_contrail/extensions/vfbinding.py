@@ -13,22 +13,31 @@
 #    under the License.
 #
 
-from neutron.api.v2 import attributes as attr
-from neutron.api import extensions
+try:
+    from neutron.api.v2.attributes import ATTR_NOT_SPECIFIED
+except:
+    from neutron_lib.constants import ATTR_NOT_SPECIFIED
+try:
+    from neutron.api.v2.attributes import convert_kvp_list_to_dict
+except:
+    from neutron_lib.api.converters import convert_kvp_list_to_dict
+try:
+    from neutron.api.extensions import ExtensionDescriptor
+except ImportError:
+    from neutron_lib.api.extensions import ExtensionDescriptor
 
 EXTENDED_ATTRIBUTES_2_0 = {
     'ports': {
         'binding:vf': {'allow_post': True,
                        'allow_put': True,
-                       'convert_list_to':
-                        attr.convert_kvp_list_to_dict,
-                       'default': attr.ATTR_NOT_SPECIFIED,
+                       'convert_list_to': convert_kvp_list_to_dict,
+                       'default': ATTR_NOT_SPECIFIED,
                        'is_visible': True},
     },
 }
 
 
-class Vfbinding(extensions.ExtensionDescriptor):
+class Vfbinding(ExtensionDescriptor):
 
     @classmethod
     def get_name(cls):

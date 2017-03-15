@@ -15,8 +15,18 @@
 # @author: Hampapur Ajay, Praneet Bachheti, Rudra Rugge, Atul Moghe
 import requests
 
-from neutron.api.v2 import attributes as attr
-from neutron.common import exceptions as exc
+try:
+    from neutron.api.v2.attributes import ATTR_NOT_SPECIFIED
+except:
+    from neutron_lib.constants import ATTR_NOT_SPECIFIED
+try:
+    from neutron.common.exceptions import ServiceUnavailable
+except ImportError:
+    from neutron_lib.exceptions import ServiceUnavailable
+try:
+    from neutron.common.exceptions import BadRequest
+except ImportError:
+    from neutron_lib.exceptions import BadRequest
 from neutron.common.config import cfg
 from neutron.db import portbindings_base
 from neutron.db import quota_db  # noqa
@@ -71,7 +81,7 @@ analytics_opts = [
                help='Port to connect to VNC collector'),
 ]
 
-class InvalidContrailExtensionError(exc.ServiceUnavailable):
+class InvalidContrailExtensionError(ServiceUnavailable):
     message = _("Invalid Contrail Extension: %(ext_name) %(ext_class)")
 
 class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
@@ -90,11 +100,19 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
 
             self._authn_body = body
             self._authn_token = cfg.CONF.keystone_authtoken.admin_token
-            self._keystone_url = "%s://%s:%s%s" % (
-                cfg.CONF.keystone_authtoken.auth_protocol,
-                cfg.CONF.keystone_authtoken.auth_host,
-                cfg.CONF.keystone_authtoken.auth_port,
-                "/v2.0/tokens")
+            try:
+                auth_token_url = cfg.CONF.APISERVER.auth_token_url
+            except cfg.NoSuchOptError:
+                auth_token_url = None
+
+            if auth_token_url:
+                self._keystone_url = auth_token_url
+            else:
+                self._keystone_url = "%s://%s:%s%s" % (
+                    cfg.CONF.keystone_authtoken.auth_protocol,
+                    cfg.CONF.keystone_authtoken.auth_host,
+                    cfg.CONF.keystone_authtoken.auth_port,
+                    "/v2.0/tokens")
 
             #Keystone SSL Support
             self._ksinsecure=cfg.CONF.keystone_authtoken.insecure
@@ -217,6 +235,12 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
 
     def _encode_resource(self, resource_id=None, resource=None, fields=None,
                          filters=None):
+        # New OpenStack release replace the 'tenant' term by 'project' and
+        # all tools which call OpenStack APIs also did the moved and use
+        # 'project_id' instead of 'tenant_id' to query resources for a project
+        if (filters is not None and 'project_id' in filters and
+                'tenant_id' not in filters):
+            filters['tenant_id'] = filters['project_id']
         resource_dict = {}
         if resource_id:
             resource_dict['id'] = resource_id
@@ -251,7 +275,7 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
         """
 
         for key, value in res_data[res_type].items():
-            if value == attr.ATTR_NOT_SPECIFIED:
+            if value == ATTR_NOT_SPECIFIED:
                 del res_data[res_type][key]
 
         res_dict = self._encode_resource(resource=res_data[res_type])
@@ -339,12 +363,12 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
 
         if not interface_info:
             msg = _("Either subnet_id or port_id must be specified")
-            raise exc.BadRequest(resource='router', msg=msg)
+            raise BadRequest(resource='router', msg=msg)
 
         if 'port_id' in interface_info:
             if 'subnet_id' in interface_info:
                 msg = _("Cannot specify both subnet-id and port-id")
-                raise exc.BadRequest(resource='router', msg=msg)
+                raise BadRequest(resource='router', msg=msg)
 
         res_dict = self._encode_resource(resource_id=router_id,
                                          resource=interface_info)
@@ -360,7 +384,7 @@ class NeutronPluginContrailCoreV2(plugin_base.NeutronPluginContrailCoreBase):
 
         if not interface_info:
             msg = _("Either subnet_id or port_id must be specified")
-            raise exc.BadRequest(resource='router', msg=msg)
+            raise BadRequest(resource='router', msg=msg)
 
         res_dict = self._encode_resource(resource_id=router_id,
                                          resource=interface_info)

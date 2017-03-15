@@ -13,7 +13,10 @@ except ImportError:
 
 from cfgm_common import analytics_client
 from cfgm_common import exceptions as vnc_exc
-from neutron.common import exceptions as n_exc
+try:
+    from neutron.common.exceptions import BadRequest
+except ImportError:
+    from neutron_lib.exceptions import BadRequest
 
 from neutron_lbaas.extensions import loadbalancerv2
 from neutron_lbaas.extensions.loadbalancerv2 import LoadBalancerPluginBaseV2
@@ -57,7 +60,7 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
             self.auth_url = "/v2.0/tokens"
 
         try:
-            self.auth_type = cfg.CONF.keystone_authtoken.auth_type
+            self.auth_type = cfg.CONF.auth_strategy
         except cfg.NoSuchOptError:
             self.auth_type = "keystone"
 
@@ -65,6 +68,11 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
             self.api_server_url = cfg.CONF.APISERVER.api_server_url
         except cfg.NoSuchOptError:
             self.api_server_url = "/"
+
+        try:
+            self.auth_token_url = cfg.CONF.APISERVER.auth_token_url
+        except cfg.NoSuchOptError:
+            self.auth_token_url = None
 
     @property
     def api(self):
@@ -82,7 +90,8 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
                         auth_protocol=self.auth_protocol,
                         auth_url=self.auth_url, auth_type=self.auth_type,
                         wait_for_connect=True,
-                        api_server_use_ssl=self.api_srvr_use_ssl)
+                        api_server_use_ssl=self.api_srvr_use_ssl,
+                        auth_token_url=self.auth_token_url)
                 connected = True
             except requests.exceptions.RequestException:
                 time.sleep(3)
@@ -148,7 +157,7 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
         try:
             return self.loadbalancer_manager.create(context, loadbalancer)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='loadbalancer', msg=str(ex))
+            raise BadRequest(resource='loadbalancer', msg=str(ex))
 
     def update_loadbalancer(self, context, id, loadbalancer):
         return self.loadbalancer_manager.update(context, id, loadbalancer)
@@ -160,7 +169,7 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
         try:
             return self.listener_manager.create(context, listener)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='listener', msg=str(ex))
+            raise BadRequest(resource='listener', msg=str(ex))
 
     def get_listener(self, context, id, fields=None):
         return self.listener_manager.get_resource(context, id, fields)
@@ -184,7 +193,7 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
         try:
             return self.pool_manager.create(context, pool)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='pool', msg=str(ex))
+            raise BadRequest(resource='pool', msg=str(ex))
 
     def update_pool(self, context, id, pool):
         return self.pool_manager.update(context, id, pool)
@@ -202,7 +211,7 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
         try:
             return self.member_manager.create(context, pool_id, member)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='member', msg=str(ex))
+            raise BadRequest(resource='member', msg=str(ex))
 
     def update_pool_member(self, context, id, pool_id, member):
         return self.member_manager.update(context, id, member)
@@ -226,7 +235,7 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
         try:
             return self.monitor_manager.create(context, healthmonitor)
         except vnc_exc.PermissionDenied as ex:
-            raise n_exc.BadRequest(resource='healthmonitor', msg=str(ex))
+            raise BadRequest(resource='healthmonitor', msg=str(ex))
 
     def update_healthmonitor(self, context, id, healthmonitor):
         return self.monitor_manager.update(context, id, healthmonitor)
@@ -271,3 +280,5 @@ class LoadBalancerPluginDbV2(LoadBalancerPluginBaseV2):
     def delete_l7policy_rule(self, context, id, l7policy_id):
         pass
 
+    def create_graph(self, context, graph):
+        pass

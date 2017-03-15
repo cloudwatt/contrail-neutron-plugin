@@ -1,4 +1,7 @@
-from neutron.api import extensions
+try:
+    from neutron.api.extensions import ExtensionDescriptor
+except ImportError:
+    from neutron_lib.api.extensions import ExtensionDescriptor
 
 
 EXTENDED_ATTRIBUTES_2_0 = {
@@ -43,7 +46,7 @@ EXTENDED_ATTRIBUTES_2_0 = {
 }
 
 
-class Contrail(extensions.ExtensionDescriptor):
+class Contrail(ExtensionDescriptor):
 
     @classmethod
     def get_name(cls):

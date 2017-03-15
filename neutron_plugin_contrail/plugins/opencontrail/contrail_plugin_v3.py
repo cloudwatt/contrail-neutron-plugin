@@ -14,8 +14,14 @@
 
 import time
 
-from neutron.api.v2 import attributes as attr
-from neutron.common import exceptions as exc
+try:
+    from neutron.api.v2.attributes import ATTR_NOT_SPECIFIED
+except:
+    from neutron_lib.constants import ATTR_NOT_SPECIFIED
+try:
+    from neutron.common.exceptions import BadRequest
+except ImportError:
+    from neutron_lib.exceptions import BadRequest
 from neutron.common.config import cfg
 import requests
 
@@ -100,6 +106,11 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         except cfg.NoSuchOptError:
             api_server_url = "/"
 
+        try:
+            auth_token_url = cfg.CONF.APISERVER.auth_token_url
+        except cfg.NoSuchOptError:
+            auth_token_url = None
+
         # Retry till a api-server is up
         connected = False
         while not connected:
@@ -109,13 +120,13 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
                     api_srvr_ip, api_srvr_port, api_server_url,
                     auth_host=auth_host, auth_port=auth_port,
                     auth_protocol=auth_protocol, auth_url=auth_url,
-                    auth_type=auth_type)
+                    auth_type=auth_type, auth_token_url=auth_token_url)
                 self._vnc_lib_member = vnc_api.VncApi(
                     admin_user, admin_password, admin_tenant_name,
                     api_srvr_ip, api_srvr_port, api_server_url,
                     auth_host=auth_host, auth_port=auth_port,
                     auth_protocol=auth_protocol, auth_url=auth_url,
-                    auth_type=auth_type)
+                    auth_type=auth_type, auth_token_url=auth_token_url)
                 connected = True
             except requests.exceptions.RequestException:
                 time.sleep(3)
@@ -185,7 +196,7 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
 
     def _create_resource(self, res_type, context, res_data):
         for key, value in res_data[res_type].items():
-            if value == attr.ATTR_NOT_SPECIFIED:
+            if value == ATTR_NOT_SPECIFIED:
                 del res_data[res_type][key]
 
         self._set_user_infos(context)
@@ -223,12 +234,12 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
 
         if not interface_info:
             msg = "Either subnet_id or port_id must be specified"
-            raise exc.BadRequest(resource='router', msg=msg)
+            raise BadRequest(resource='router', msg=msg)
 
         if 'port_id' in interface_info:
             if 'subnet_id' in interface_info:
                 msg = "Cannot specify both subnet-id and port-id"
-                raise exc.BadRequest(resource='router', msg=msg)
+                raise BadRequest(resource='router', msg=msg)
 
         self._set_user_infos(context)
         port_id = interface_info.get('port_id')
@@ -245,7 +256,7 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
 
         if not interface_info:
             msg = "Either subnet_id or port_id must be specified"
-            raise exc.BadRequest(resource='router', msg=msg)
+            raise BadRequest(resource='router', msg=msg)
 
         port_id = interface_info.get('port_id')
         subnet_id = interface_info.get('subnet_id')
