@@ -106,11 +106,6 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
         except cfg.NoSuchOptError:
             api_server_url = "/"
 
-        try:
-            auth_token_url = cfg.CONF.APISERVER.auth_token_url
-        except cfg.NoSuchOptError:
-            auth_token_url = None
-
         # Retry till a api-server is up
         connected = False
         while not connected:
@@ -120,13 +115,13 @@ class NeutronPluginContrailCoreV3(plugin_base.NeutronPluginContrailCoreBase):
                     api_srvr_ip, api_srvr_port, api_server_url,
                     auth_host=auth_host, auth_port=auth_port,
                     auth_protocol=auth_protocol, auth_url=auth_url,
-                    auth_type=auth_type, auth_token_url=auth_token_url)
+                    auth_type=auth_type)
                 self._vnc_lib_member = vnc_api.VncApi(
                     admin_user, admin_password, admin_tenant_name,
                     api_srvr_ip, api_srvr_port, api_server_url,
                     auth_host=auth_host, auth_port=auth_port,
                     auth_protocol=auth_protocol, auth_url=auth_url,
-                    auth_type=auth_type, auth_token_url=auth_token_url)
+                    auth_type=auth_type)
                 connected = True
             except requests.exceptions.RequestException:
                 time.sleep(3)
