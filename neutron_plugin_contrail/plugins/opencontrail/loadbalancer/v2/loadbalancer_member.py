@@ -25,6 +25,7 @@ class LoadbalancerMemberManager(ResourceManager):
         'protocol_port': 'protocol_port',
         'weight': 'weight',
         'address': 'address',
+        'subnet_id': 'subnet_id',
     }
 
     @property
