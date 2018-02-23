@@ -883,14 +883,11 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
     # returns vm objects, net objects, and instance ip objects
     def _get_vmis_nets_ips(self, context, project_ids=None,
                            device_ids=None, vmi_uuids=None, vn_ids=None):
-        vn_list_handler = vn_handler.VNetworkGetHandler(self._vnc_lib)
         pool = eventlet.GreenPool()
-        vn_objs_t = pool.spawn(vn_list_handler.get_vn_obj_list,
-                               parent_id=project_ids, detail=True)
-
         vmi_objs_t = None
         vmi_obj_uuids_t = None
         back_ref_id = []
+
         if device_ids:
             back_ref_id = device_ids
 
@@ -910,8 +907,6 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
 
         pool.waitall()
 
-        vn_objs = vn_objs_t._exit_event._result
-
         vmi_objs = []
         if vmi_objs_t is not None:
             vmi_objs = vmi_objs_t._exit_event._result or []
@@ -920,9 +915,25 @@ class VMInterfaceGetHandler(res_handler.ResourceGetHandler, VMInterfaceMixin):
             vmi_objs.extend(vmi_obj_uuids_t._exit_event._result or [])
 
         vmis_ids = [vmi.uuid for vmi in vmi_objs]
-        iip_list_handler = res_handler.InstanceIpHandler(self._vnc_lib)
-        iips_objs = iip_list_handler.get_iip_obj_list(back_ref_id=vmis_ids,
+
+        if vmis_ids:
+            vn_ids = []
+            # don't fail when no network is linked to the vmi
+            for vmi in vmi_objs:
+                net_id = self.get_vmi_net_id(vmi)
+                if net_id is not None:
+                    vn_ids.append(net_id)
+            vn_ids = list(set(vn_ids))
+            vn_list_handler = vn_handler.VNetworkGetHandler(self._vnc_lib)
+            vn_objs = vn_list_handler.get_vn_obj_list(parent_id=project_ids,
+                                                      obj_uuids=vn_ids,
                                                       detail=True)
+            iip_list_handler = res_handler.InstanceIpHandler(self._vnc_lib)
+            iips_objs = iip_list_handler.get_iip_obj_list(back_ref_id=vmis_ids,
+                                                          detail=True)
+        else:
+            vn_objs = []
+            iips_objs = []
 
         return vmi_objs, vn_objs, iips_objs
 
