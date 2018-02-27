@@ -232,9 +232,9 @@ class FloatingIpGetHandler(res_handler.ResourceGetHandler, FloatingIpMixin):
                     context, filters['tenant_id'])
             elif 'port_id' in filters:
                 port_ids = filters['port_id']
-        else:  # no filters
-            if not context['is_admin']:
-                proj_ids = [self._project_id_neutron_to_vnc(context['tenant'])]
+
+        if not context['is_admin']:
+            proj_ids = [self._project_id_neutron_to_vnc(context['tenant'])]
 
         if port_ids:
             fip_objs = self._resource_list(back_ref_id=port_ids)
