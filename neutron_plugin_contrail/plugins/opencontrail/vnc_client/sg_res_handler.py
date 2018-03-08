@@ -109,23 +109,20 @@ class SecurityGroupMixin(object):
         self._vnc_lib.security_group_create(sg_obj)
         return sg_obj.uuid
 
-    def _ensure_default_security_group_exists(self, proj_id):
-        if proj_id is None:
-            projects = self._vnc_lib.projects_list()['projects']
-            for project in projects:
-                self._ensure_default_security_group_exists(project['uuid'])
+    def ensure_default_security_group_exists(self, context):
+        try:
+            return self._vnc_lib.fq_name_to_id(
+                'security-group',
+                ['default-domain', context['tenant_name'], 'default']
+            )
+        except vnc_exc.NoIdError:
+            pass
 
-            return
+        proj_id = self._project_id_neutron_to_vnc(context['tenant'])
+        proj_obj = self._vnc_lib.project_read(id=proj_id)
 
-        proj_id = self._project_id_neutron_to_vnc(proj_id)
-        proj_obj = self._vnc_lib.project_read(id=proj_id,
-                                              fields=['security_groups'])
-        sg_groups = proj_obj.get_security_groups()
-        for sg_group in sg_groups or []:
-            if sg_group['to'][-1] == 'default':
-                return sg_group['uuid']
         return self._create_default_security_group(proj_obj)
-    # end _ensure_default_security_group_exists
+    # end ensure_default_security_group_exists
 
 
 class SecurityGroupBaseGet(res_handler.ResourceGetHandler):
@@ -175,7 +172,7 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
         # collect phase
-        self._ensure_default_security_group_exists(context['tenant'])
+        self.ensure_default_security_group_exists(context)
 
         all_sgs = []  # all sgs in all projects
         if context and not context['is_admin']:
@@ -297,7 +294,7 @@ class SecurityGroupCreateHandler(res_handler.ResourceCreateHandler,
 
         # ensure default SG and deny create if the group name is default
         if sg_q['name'] == 'default':
-            self._ensure_default_security_group_exists(sg_q['tenant_id'])
+            self.ensure_default_security_group_exists(context)
             self._raise_contrail_exception(
                 "SecurityGroupAlreadyExists", resource='security_group')
 

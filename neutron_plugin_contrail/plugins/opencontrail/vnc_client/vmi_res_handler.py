@@ -664,7 +664,7 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
             tenant_id = context['tenant']
         return tenant_id
 
-    def _create_vmi_obj(self, port_q, vn_obj):
+    def _create_vmi_obj(self, port_q, vn_obj, context):
         project_id = self._project_id_neutron_to_vnc(port_q['tenant_id'])
         try:
             proj_obj = self._project_read(proj_id=project_id)
@@ -687,8 +687,7 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
                 port_q['security_groups'].__class__ is object):
             sg_obj = vnc_api.SecurityGroup("default", proj_obj)
             uid = sg_handler.SecurityGroupHandler(
-                self._vnc_lib)._ensure_default_security_group_exists(
-                proj_obj.uuid)
+                self._vnc_lib).ensure_default_security_group_exists(context)
             sg_obj.uuid = uid
             vmi_obj.add_security_group(sg_obj)
 
@@ -719,7 +718,7 @@ class VMInterfaceCreateHandler(res_handler.ResourceCreateHandler,
             self._validate_mac_address(proj_id, net_id, port_q['mac_address'])
 
         # initialize port object
-        vmi_obj = self._create_vmi_obj(port_q, vn_obj)
+        vmi_obj = self._create_vmi_obj(port_q, vn_obj, context)
         vmi_obj = self._neutron_port_to_vmi(port_q, vmi_obj=vmi_obj)
 
         # determine creation of v4 and v6 ip object
