@@ -151,14 +151,12 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
         if project_id:
             try:
                 project_uuid = self._project_id_neutron_to_vnc(project_id)
-                # Trigger a project read to ensure project sync
-                self._project_read(proj_id=project_uuid)
-            except vnc_exc.NoIdError:
-                return []
+            except ValueError:
+                project_uuid = None
         else:
             project_uuid = None
 
-        obj_uuids=None
+        obj_uuids = None
         if filters and 'id' in filters:
             obj_uuids = filters['id']
 
