@@ -136,15 +136,16 @@ class QuotaDriver(object):
 
     @classmethod
     def _get_tenant_quotas(cls, context, resources, tenant_id,
-                           default_quota, get_default=True):
+                           default_quota, get_default=True, proj_obj=None):
         """Get quotas of a tenant.
 
         :param get_default: if False, does not return quotas if they
         only contain default values.
         """
         try:
-            proj_id = str(uuid.UUID(tenant_id))
-            proj_obj = cls._get_vnc_conn().project_read(id=proj_id)
+            if proj_obj is None:
+                proj_id = str(uuid.UUID(tenant_id))
+                proj_obj = cls._get_vnc_conn().project_read(id=proj_id)
             quota = proj_obj.get_quota()
         except vnc_exc.NoIdError:
             return {}
@@ -182,15 +183,15 @@ class QuotaDriver(object):
         except vnc_exc.NoIdError:
             default_quota = None
 
-        project_list = cls._get_vnc_conn().projects_list()['projects']
+        project_list = cls._get_vnc_conn().projects_list(detail=True)
         ret_list = []
         for project in project_list:
-            if default_quota and (project['uuid'] == default_project.uuid):
+            if default_quota and (project.uuid == default_project.uuid):
                 continue
-            quotas = cls._get_tenant_quotas(context, resources, project['uuid'],
-                                            default_quota, get_default=False)
+            quotas = cls._get_tenant_quotas(context, resources, project.uuid,
+                                            default_quota, get_default=False, proj_obj=project)
             if quotas != {}:
-                quotas['tenant_id'] = project['uuid'].replace('-', '')
+                quotas['tenant_id'] = project.uuid.replace('-', '')
                 ret_list.append(quotas)
         return ret_list
 
