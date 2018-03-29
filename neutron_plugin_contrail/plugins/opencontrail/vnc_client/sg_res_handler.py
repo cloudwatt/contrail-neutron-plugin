@@ -173,8 +173,6 @@ class SecurityGroupGetHandler(SecurityGroupBaseGet, SecurityGroupMixin):
         contrail_extensions_enabled = self._kwargs.get(
             'contrail_extensions_enabled', False)
         # collect phase
-        self._ensure_default_security_group_exists(context['tenant'])
-
         all_sgs = []  # all sgs in all projects
         if context and not context['is_admin']:
             project_sgs = self.resource_list_by_project(
