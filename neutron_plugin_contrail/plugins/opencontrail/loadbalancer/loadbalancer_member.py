@@ -92,6 +92,10 @@ class LoadbalancerMemberManager(ResourceManager):
         except NoIdError:
             pass
 
+	props = pool.get_loadbalancer_pool_properties()
+	if getattr(props, "subnet_id", None) is None:
+            raise NoIdError('')
+
         props = member.get_loadbalancer_member_properties()
         for key, mapping in self._loadbalancer_member_type_mapping.iteritems():
             value = getattr(props, key, None)

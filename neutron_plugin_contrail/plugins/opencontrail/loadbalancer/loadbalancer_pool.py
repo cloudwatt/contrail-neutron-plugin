@@ -66,6 +66,8 @@ class LoadbalancerPoolManager(ResourceManager):
         props = pool.get_loadbalancer_pool_properties()
         for key, mapping in self._loadbalancer_pool_type_mapping.iteritems():
             value = getattr(props, key, None)
+            if key is 'subnet_id' and value is None:
+                raise NoIdError('')
             if value is not None:
                 res[mapping] = value
 
