@@ -45,7 +45,7 @@ class LoadbalancerMemberManager(ResourceManager):
 
     def make_dict(self, member, fields=None):
         res = {'id': member.uuid,
-               'name': member.name,
+               'name': member.display_name,
                'pool_id': member.parent_uuid,
                'status': self._get_object_status(member)}
 
@@ -145,12 +145,14 @@ class LoadbalancerMemberManager(ResourceManager):
             raise n_exc.NotAuthorized()
 
         obj_uuid = uuidutils.generate_uuid()
+        name = self._get_resource_name('loadbalancer-member', pool,
+                                       m.get('name', obj_uuid), obj_uuid)
         props = self.make_properties(m)
         id_perms = IdPermsType(enable=True)
 
         member_db = LoadbalancerMember(
-            obj_uuid, pool, loadbalancer_member_properties=props,
-            id_perms=id_perms)
+            name, pool, loadbalancer_member_properties=props,
+            id_perms=id_perms, display_name=m.get('name'))
         member_db.uuid = obj_uuid
 
         self._api.loadbalancer_member_create(member_db)
